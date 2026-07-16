@@ -231,7 +231,7 @@ grace_agent_v2_react_openai/
 | P0-02 | P0 | DONE | 既存UIと進捗実装を調査する | `ui/pages/grace_chat_page.py`、`grace_components.py` | Streamlit、session state、generator利用、HITL自動続行を特定 |
 | P0-03 | P0 | DONE | Action・本人確認・介入を調査する | `support_actions.py`、`grace/intervention.py` | dry-run／pseudo／webhook／CSV照合／CONFIRMを整理 |
 | P0-04 | P0 | DONE | React／API基盤の有無を調査する | `pyproject.toml`、`requirements.txt`、リポジトリ全体 | FastAPI依存あり、React基盤なしを確認 |
-| P0-05 | P0 | TODO | 現行の純関数・Actionテストを実行する | `tests/test_agent_support_vertical.py`、`tests/test_support_actions.py` | APIキー・Qdrant不要の対象テストが全件成功 |
+| P0-05 | P0 | DONE | 現行の純関数・Actionテストを実行する | `tests/test_agent_support_vertical.py`、`tests/test_support_actions.py` | 2026-07-16: APIキー・Qdrant不要の対象テストが79件すべて成功 |
 | P0-06 | P0 | TODO | CLI代表ケースのベースラインを定義する | `eval/vertical/cases/*.jsonl`、`eval/vertical/run.py` | gov／saas／ecでanswer、forced escalate、no-info、action各1件以上を固定 |
 | P0-07 | P1 | TODO | 実API利用可能時のCLIベースラインを保存する | Qdrant、Anthropic、Gemini、Web検索 | SupportResultと実行時間をJSON記録。利用不能時はモック基準を明記 |
 
