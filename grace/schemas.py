@@ -183,6 +183,13 @@ class StepResult(BaseModel):
         description="エラーメッセージ（失敗時）"
     )
 
+    error_code: Optional[Literal[
+        "timeout", "tool_error", "cancelled", "dependency_error", "validation_error"
+    ]] = Field(
+        None,
+        description="UI・監査用の構造化エラー分類"
+    )
+
     execution_time_ms: Optional[int] = Field(
         None,
         description="実行時間（ミリ秒）"

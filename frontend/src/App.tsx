@@ -8,7 +8,7 @@ import './details.css'
 
 const initial: RunRequest = { query: '', vertical: null, use_web: true, do_action: true, dry_run: true }
 type PlanData = { complexity:number; success_criteria:string; steps:{step_id:number;action:string;description:string;depends_on?:number[]}[] }
-export type StepData = { step_id:number; status:string; confidence?:number; sources?:unknown[]; execution_time_ms?:number; origin?:string; error?:string }
+export type StepData = { step_id:number; status:string; confidence?:number; sources?:unknown[]; execution_time_ms?:number; origin?:string; error?:string; error_code?:string }
 const escalationLabels: Record<string, string> = {
   insufficient_grounding: '回答の根拠を十分に検証できませんでした。',
   contradiction: '情報源間の矛盾を検知しました。',
@@ -16,6 +16,18 @@ const escalationLabels: Record<string, string> = {
   forced_policy: '業務ポリシーにより自動回答を停止しました。',
   identity_required: '本人確認が必要です。',
   system_error: '処理中にシステムエラーが発生しました。',
+}
+const stepErrorLabels: Record<string, string> = {
+  timeout: 'タイムアウト',
+  tool_error: 'ツール実行エラー',
+  cancelled: 'キャンセル',
+  dependency_error: '依存ステップ未完了',
+  validation_error: '入力・設定エラー',
+}
+
+export function formatStepError(step: StepData): string {
+  if (!step.error) return ''
+  return `${stepErrorLabels[step.error_code ?? ''] ?? '実行エラー'}: ${step.error}`
 }
 
 export function selectFinalSteps(events: RunEvent[]): StepData[] {
@@ -109,7 +121,7 @@ export default function App() {
     {error&&<div className="toast"><AlertTriangle/>{error}<button onClick={()=>setError('')}>×</button></div>}
     {run&&<section className="results"><Title n="03" title="検証と回答" sub="処理結果はイベントとともに更新されます"/>
       <div className="metrics"><Metric k="状態" v={run.state}/><Metric k="業界" v={run.request.vertical??'未指定'}/><Metric k="Groundedness" v={run.result&&run.result.groundedness_decided>0?`${Math.round(run.result.groundedness*100)}%`:'判定不能'}/><Metric k="取得／検証出典" v={run.result?`${run.result.retrieved_source_count}/${run.result.verified_source_count}`:'0/0'}/><Metric k="イベント" v={String(events.length)}/></div>
-      <div className="detail-grid">{plan&&<article className="detail-panel"><small>PLAN v{planRevision}</small><h3>{planRevision>1?'現在の実行計画':'実行計画'}</h3><p>複雑度 {plan.complexity.toFixed(2)} ・ {plan.steps.length} steps</p><ol>{plan.steps.map(step=><li key={step.step_id}><b>{step.step_id}. {step.description}</b><span>{step.action}{step.depends_on?.length?` / depends on ${step.depends_on.join(', ')}`:''}</span></li>)}</ol><p className="criteria">成功条件: {plan.success_criteria}</p></article>}{executed.length>0&&<article className="detail-panel"><small>EXECUTE</small><h3>確定ステップ結果</h3><p>{executionAttempts.length}件の途中状態から、各ステップの確定結果だけを表示しています。</p><ol>{executed.map(step=><li key={step.step_id}><b>Step {step.step_id} — {step.status}</b><span>{step.origin??'planned'} / confidence {Number(step.confidence??0).toFixed(2)} / sources {step.sources?.length??0} / {step.execution_time_ms??0}ms{step.error?` / ${step.error}`:''}</span></li>)}</ol>{executionAttempts.length>0&&<details><summary>途中の試行履歴を表示</summary><ol>{executionAttempts.map((step,index)=><li key={`${step.step_id}-${index}`}><b>Attempt {index+1}: Step {step.step_id} — {step.status}</b><span>{step.execution_time_ms??0}ms{step.error?` / ${step.error}`:''}</span></li>)}</ol></details>}</article>}</div>
+      <div className="detail-grid">{plan&&<article className="detail-panel"><small>PLAN v{planRevision}</small><h3>{planRevision>1?'現在の実行計画':'実行計画'}</h3><p>複雑度 {plan.complexity.toFixed(2)} ・ {plan.steps.length} steps</p><ol>{plan.steps.map(step=><li key={step.step_id}><b>{step.step_id}. {step.description}</b><span>{step.action}{step.depends_on?.length?` / depends on ${step.depends_on.join(', ')}`:''}</span></li>)}</ol><p className="criteria">成功条件: {plan.success_criteria}</p></article>}{executed.length>0&&<article className="detail-panel"><small>EXECUTE</small><h3>確定ステップ結果</h3><p>{executionAttempts.length}件の途中状態から、各ステップの確定結果だけを表示しています。</p><ol>{executed.map(step=><li key={step.step_id}><b>Step {step.step_id} — {step.status}</b><span>{step.origin??'planned'} / confidence {Number(step.confidence??0).toFixed(2)} / sources {step.sources?.length??0} / {step.execution_time_ms??0}ms{step.error?` / ${formatStepError(step)}`:''}</span></li>)}</ol>{executionAttempts.length>0&&<details><summary>途中の試行履歴を表示</summary><ol>{executionAttempts.map((step,index)=><li key={`${step.step_id}-${index}`}><b>Attempt {index+1}: Step {step.step_id} — {step.status}</b><span>{step.execution_time_ms??0}ms{step.error?` / ${formatStepError(step)}`:''}</span></li>)}</ol></details>}</article>}</div>
       {run.result&&<div className="verification"><span>判定可能主張 <b>{run.result.groundedness_decided}</b></span><span>Web <b>{run.result.used_web?'使用':'不使用'}</b></span><span>再利用 <b>{run.result.web_reused?'あり':'なし'}</b></span><span>一致度 <b>{run.result.source_agreement==null?'—':run.result.source_agreement.toFixed(2)}</b></span><span>矛盾 <b>{run.result.contradiction?'検知':'なし'}</b></span><span>強制エスカレ <b>{run.result.forced_escalate?'あり':'なし'}</b></span><span>No-info <b>{run.result.no_info_detected?'検知':'なし'}</b></span></div>}
       {run.pending_confirmation&&<div className="confirmation"><div><p className="kicker">HUMAN IN THE LOOP</p><h3>アクションの承認が必要です</h3><p><b>{run.pending_confirmation.action.action_type}</b> — 承認されるまで処理は行われません。</p><label>Action引数<textarea aria-label="Action引数" value={editedArgs} onChange={e=>setEditedArgs(e.target.value)}/></label></div><div><button className="danger" onClick={()=>decide('reject')}>却下</button><button className="secondary" onClick={modify}>修正を依頼</button><button className="primary" onClick={()=>decide('approve')}><CheckCircle2/>承認して実行</button></div></div>}
       {run.result&&<article className={`answer ${run.result.decision}`}><div className="answer-title">{run.result.decision==='answer'?<CheckCircle2/>:<AlertTriangle/>}<div><small>{run.result.decision==='answer'?'GROUNDED ANSWER':'HUMAN ESCALATION'}</small><h3>{run.result.decision==='answer'?'回答':'有人対応へ引き継ぎます'}</h3></div></div><p>{run.result.decision==='answer'?(run.result.answer??'回答を生成できませんでした。'):(escalationLabels[run.result.escalation_reason??'']??'十分な根拠が得られなかったため、自動回答を停止しました。')}</p>{run.result.warning&&<div className="warning">この回答は出典による裏付けが十分ではありません。</div>}{run.result.citations.length>0&&<div className="citations"><h4><BookOpen/>参照した出典</h4>{run.result.citations.map((citation,index)=>{const url=citation.match(/https?:\/\/\S+/)?.[0];return <p key={citation}><b>{index+1}</b>{url?<a href={url} target="_blank" rel="noreferrer">{citation}</a>:citation}</p>})}</div>}</article>}

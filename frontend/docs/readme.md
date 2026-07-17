@@ -2,6 +2,49 @@
 
 ## このアプリの実行方法
 
+### 1. Dockerを起動する
+
+QdrantとRedisは、アプリとは別にリポジトリのルートディレクトリで起動します。
+
+```bash
+docker compose -f docker-compose/docker-compose.yml up -d
+```
+
+起動確認:
+
+```bash
+docker compose -f docker-compose/docker-compose.yml ps
+```
+
+### 2. アプリを起動する
+
+QdrantとRedisの起動後、リポジトリのルートディレクトリで次の1コマンドを実行します。
+
+```bash
+./start_react_app.sh
+```
+
+起動済みのQdrant・Redisへの接続を確認した後、FastAPIとReactが順番に起動し、
+完了すると`http://localhost:5173`が表示されます。FastAPIとReactを終了するには
+同じターミナルで`Ctrl+C`を押してください。Dockerの起動・停止はこのスクリプトでは行いません。
+
+初回だけ`frontend/node_modules`が存在しない場合に`npm ci`も自動実行します。
+
+### 3. 画面を開く
+
+ブラウザで[http://localhost:5173](http://localhost:5173)を開きます。
+
+### 4. 終了する
+
+`start_react_app.sh`を実行したターミナルで`Ctrl+C`を押すと、FastAPIとReactが終了します。
+Dockerは停止しません。QdrantとRedisも停止する場合だけ、別途次を実行します。
+
+```bash
+docker compose -f docker-compose/docker-compose.yml down
+```
+
+> 📝 **注意**: `down -v`はQdrantとRedisの永続ボリュームを削除するため、通常の終了では使用しないでください。
+
 ### 前提条件
 
 - Docker / Docker Compose
@@ -10,71 +53,8 @@
 - リポジトリ直下の`.env`または環境変数に`OPENAI_API_KEY`を設定済み
 - 検索対象のQdrantコレクションを登録済み（コレクションは本アプリから自動作成しません）
 
-### 1. QdrantとRedisを起動する
-
-リポジトリのルートディレクトリで実行します。
-
-```bash
-docker-compose -f docker-compose/docker-compose.yml up -d
-```
-
-起動確認:
-
-```bash
-docker-compose -f docker-compose/docker-compose.yml ps
-```
-
-### 2. FastAPIバックエンドを起動する
-
-同じくリポジトリのルートディレクトリで実行します。
-
-```bash
-export AGENT_SUPPORT_STORE=redis
-uv run uvicorn api.app:app --reload --port 8000
-# ブラウザで： http://localhost:5173/
-```
-- ポート解放：
-```aiignore
-lsof -i :8000
-kill -9 PID
-```
-
-`AGENT_SUPPORT_STORE=redis`を指定すると、Run、イベント、確認待ちActionがRedisへ保存されます。省略した場合はインメモリ保存となり、バックエンド再起動時に実行履歴が失われます。
-
-別のターミナルからバックエンドを確認できます。
-
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/ready
-```
-
-- `/health`が`{"status":"ok"}`ならFastAPIは起動済みです。
-- `/ready`ではAPIキー、Qdrant、Redisの状態を確認できます。
-
-### 3. Reactフロントエンドを起動する
-
-バックエンドを動かしたまま、別のターミナルで実行します。
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-ブラウザでViteが表示したURL（通常は[http://localhost:5173](http://localhost:5173)）を開きます。開発時の`/api`リクエストはViteにより`http://localhost:8000`へ転送されます。
-
-### 4. 終了する
-
-FastAPIとViteは、それぞれのターミナルで`Ctrl+C`を押して終了します。QdrantとRedisを停止する場合は、リポジトリのルートで次を実行します。
-
-```bash
-docker-compose -f docker-compose/docker-compose.yml down
-```
-
-> 📝 **注意**: `down -v`はQdrantとRedisの永続ボリュームを削除するため、通常の終了では使用しないでください。
-
 > **対象**: `frontend/`<br>
-> **バージョン**: 1.1<br>
+> **バージョン**: 1.5<br>
 > **最終更新日**: 2026-07-17
 
 ## 目次
@@ -124,6 +104,20 @@ docker-compose -f docker-compose/docker-compose.yml down
 | HITL | 版番号・Actionハッシュ付きで承認、却下、修正 |
 | 再接続 | 保存済みRun IDを初期表示時に取得 |
 | 型同期 | OpenAPIからTypeScript型を生成 |
+| 実行結果の正規化 | リプラン後の最新Planと、各Stepの確定結果を表示 |
+| 安全な回答表示 | `answer`だけ本文を表示し、`escalate`は理由のみ表示 |
+| エラー可視化 | timeout等の構造化理由を日本語で表示 |
+
+### 1.4 Streamlit／React比較試験
+
+代表問い合わせを同一条件で比較する場合は、Qdrant起動後にリポジトリ直下で実行します。
+
+```bash
+uv run python scripts/compare_agent_support_surfaces.py \
+  --output frontend/docs/streamlit_react_comparison_result.json
+```
+
+2026-07-17の実比較では「住民票を取得したい。」に対し、React経路は`decision=answer`、Web出典8件、Actionなしとなり、窓口・コンビニ・マイナンバーカード・自治体の主要項目が両経路で一致しました。保存結果は[`streamlit_react_comparison_result.json`](./streamlit_react_comparison_result.json)を参照してください。
 
 ## 2. アーキテクチャ構成図
 
@@ -263,11 +257,12 @@ const response = await agentSupportClient.confirm(run, 'approve')
 ## 7. 使用例
 
 ```bash
-# 使用例
-cd frontend
-npm install
-npm run dev
-# 出力: Vite開発サーバー（/apiはlocalhost:8000へプロキシ）
+# Dockerは別起動
+docker compose -f docker-compose/docker-compose.yml up -d
+
+# FastAPIとReactを1コマンドで起動
+./start_react_app.sh
+# 出力: 起動完了: http://localhost:5173
 ```
 
 検証コマンド:
@@ -292,6 +287,10 @@ npm run build
 |---|---|
 | 1.0 | 初版作成。構成、実行フロー、HITL、設定、モジュール文書索引を追加 |
 | 1.1 | 文書先頭に、前提条件、Qdrant/Redis、FastAPI、Reactの起動確認・終了手順を追加 |
+| 1.2 | 実行結果正規化、構造化エラー表示、Streamlit／React比較試験の実行方法と検証結果を追加 |
+| 1.3 | `start_react_app.sh`によるQdrant、Redis、FastAPI、Reactの1コマンド起動手順を追加 |
+| 1.4 | Docker操作を起動スクリプトから分離。Qdrant・Redisは接続確認のみ行い、FastAPIとReactだけを起動する仕様へ変更 |
+| 1.5 | 起動手順と使用例を`start_react_app.sh`へ統一し、手動の`uvicorn`／`npm run dev`手順を削除 |
 
 ## 付録: 依存関係図
 

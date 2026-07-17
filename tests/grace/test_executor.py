@@ -8,9 +8,25 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from grace.config import reset_config
-from grace.executor import ExecutionState, Executor, create_executor
+from grace.executor import (
+    ExecutionState,
+    Executor,
+    classify_step_error,
+    create_executor,
+)
 from grace.schemas import ExecutionPlan, PlanStep, StepResult, StepStatus
 from grace.tools import ToolRegistry, ToolResult
+
+
+@pytest.mark.parametrize(("error", "expected"), [
+    (TimeoutError("30秒でタイムアウトしました"), "timeout"),
+    (ValueError("invalid input"), "validation_error"),
+    (RuntimeError("cancelled"), "cancelled"),
+    (RuntimeError("dependency missing"), "dependency_error"),
+    (RuntimeError("connection failed"), "tool_error"),
+])
+def test_classify_step_error(error, expected):
+    assert classify_step_error(error) == expected
 
 
 class TestExecutionState:

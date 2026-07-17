@@ -1,6 +1,6 @@
 # agentSupportClient.ts - Agent Support APIクライアント ドキュメント
 
-**Version 1.0** | 最終更新: 2026-07-17
+**Version 1.1** | 最終更新: 2026-07-17
 
 ---
 
@@ -31,7 +31,8 @@
 - 非成功HTTPレスポンスを日本語メッセージ付きの`Error`へ変換する
 - Agent Supportの実行を作成・取得・一覧表示・キャンセルする
 - 保留中アクションへの承認・拒否・修正を送信する
-- 実行ライフサイクルのSSEイベントを購読し、購読解除関数を返す
+- 実行ライフサイクルのSSEイベントを購読し、完了済みRunを含む保存済みイベントを復元する
+- 結果のエスカレーション理由、取得・検証出典数、再計画回数を型安全に受け取る
 
 ### 各責務対応のモジュール
 
@@ -41,7 +42,8 @@
 | 2 | HTTPエラーの変換 | `agentSupportClient.ts` | `json<T>()`が詳細メッセージまたはステータス付き既定文言を生成 |
 | 3 | 実行ライフサイクルのREST操作 | `agentSupportClient.ts` | `agentSupportClient`の各メソッドがエンドポイントを公開 |
 | 4 | HITL確認応答 | `agentSupportClient.ts` | `confirmation()`がversionとaction_hashを含む確認要求を送信 |
-| 5 | SSEイベント購読 | `agentSupportClient.ts` | `events()`が18イベントを登録し、終了用クロージャを返す |
+| 5 | SSEイベント購読とイベント復元 | `agentSupportClient.ts`、`api/routes/agent_support.py` | `events()`が19イベントを登録し、SSE側が保存済みイベントをID順に再送 |
+| 6 | 拡張結果メタデータの受信 | `agentSupport.ts`、`agent_support_schemas.py` | `SupportResult`でエスカレーション理由、出典数、再計画回数を共有 |
 
 ### 主要機能一覧
 
@@ -54,7 +56,7 @@
 | `agentSupportClient.getRun()` | 実行IDで最新状態を取得 |
 | `agentSupportClient.cancel()` | 実行のキャンセルを要求 |
 | `agentSupportClient.confirm()` | `confirmation()`を公開APIとして提供 |
-| `agentSupportClient.events()` | 実行のSSEイベントを購読 |
+| `agentSupportClient.events()` | 実行のSSEイベントを購読し、保存済みイベントを受信 |
 
 ---
 
@@ -104,7 +106,8 @@ style BACKEND fill:#1a1a1a,stroke:#fff,color:#fff
 2. REST操作は`json<T>()`を介し、`VITE_API_BASE`とAPIパスを結合して`fetch()`を実行します。
 3. HITL確認では、保留中確認情報の`version`と`action_hash`を実行レコードから取り出して送信します。
 4. SSE購読では`EventSource`を生成し、イベント名ごとのリスナーでJSONを`RunEvent`としてコールバックへ渡します。
-5. 呼び出し元は`events()`の戻り値を実行してSSE接続を明示的に閉じます。
+5. SSE APIは`Last-Event-ID`（初回は`0`）より大きい保存済みイベントを順に返します。Runが完了済みでも、未送信イベントを返してからストリームを終了するため画面状態を復元できます。
+6. 呼び出し元はイベントIDで重複を除外し、`events()`の戻り値を実行してSSE接続を明示的に閉じます。
 
 ---
 
@@ -433,7 +436,7 @@ await agentSupportClient.confirm(run, 'reject')
 
 #### `events`
 
-**概要**: 指定実行のSSEエンドポイントへ接続し、18種類の名前付きイベントを購読します。
+**概要**: 指定実行のSSEエンドポイントへ接続し、再計画を含む19種類の名前付きイベントを購読します。初回接続時はSSE APIから保存済みイベントが送信されるため、完了済みRunの計画・ステップ履歴も復元できます。
 
 ```typescript
 events(
@@ -452,7 +455,7 @@ events(
 | 項目 | 内容 |
 |------|------|
 | **Input** | `id`、`onEvent`、`onError` |
-| **Process** | 1. `EventSource`を生成<br>2. 18種類のイベント名にリスナーを登録<br>3. 各`MessageEvent.data`を`JSON.parse()`して`onEvent`へ渡す<br>4. `source.onerror`に`onError`を設定<br>5. `source.close()`を呼ぶクロージャを生成 |
+| **Process** | 1. `EventSource`を生成<br>2. 19種類のイベント名にリスナーを登録<br>3. サーバーから保存済みイベント（完了済みRunを含む）と新規イベントを受信<br>4. 各`MessageEvent.data`を`JSON.parse()`して`onEvent`へ渡す<br>5. `source.onerror`に`onError`を設定<br>6. `source.close()`を呼ぶクロージャを生成 |
 | **Output** | `() => void`: SSE接続を閉じる購読解除関数 |
 
 **戻り値例**:
@@ -557,28 +560,29 @@ export const agentSupportClient = {
 
 ## 8. SSEイベント一覧
 
-`events()`は次の18種類を`addEventListener()`で購読します。すべてのイベントペイロードは`JSON.parse()`後、共通の`RunEvent`として`onEvent`へ渡されます。
+`events()`は次の19種類を`addEventListener()`で購読します。すべてのイベントペイロードは`JSON.parse()`後、共通の`RunEvent`として`onEvent`へ渡されます。
 
 | # | イベント名 | 意味 |
 |---|-----------|------|
 | 1 | `plan_started` | 計画生成の開始 |
 | 2 | `plan_completed` | 計画生成の完了 |
-| 3 | `execution_started` | 計画実行の開始 |
-| 4 | `executor_state` | Executorの状態更新 |
-| 5 | `tool_event` | ツール実行に関するイベント |
-| 6 | `step_completed` | 実行ステップの完了 |
-| 7 | `groundedness_completed` | Groundedness評価の完了 |
-| 8 | `gate_completed` | 回答ゲート判定の完了 |
-| 9 | `web_started` | Web相互検証の開始 |
-| 10 | `web_completed` | Web相互検証の完了 |
-| 11 | `no_info_completed` | 情報なし検知の完了 |
-| 12 | `confirmation_required` | HITL確認が必要な状態への遷移 |
-| 13 | `confirmation_resolved` | HITL確認の解決 |
-| 14 | `action_started` | 確認済みアクションの開始 |
-| 15 | `action_completed` | アクションの完了 |
-| 16 | `run_completed` | 実行全体の正常完了 |
-| 17 | `run_failed` | 実行全体の失敗 |
-| 18 | `run_cancelled` | 実行全体のキャンセル |
+| 3 | `replan_completed` | 再計画の完了。`data.plan`に更新後の計画を含む |
+| 4 | `execution_started` | 計画実行の開始 |
+| 5 | `executor_state` | Executorの途中状態・試行結果の更新 |
+| 6 | `tool_event` | ツール実行に関するイベント |
+| 7 | `step_completed` | 実行ステップの確定結果。失敗時は`data.step.error`と`data.step.error_code`を含み得る |
+| 8 | `groundedness_completed` | Groundedness評価の完了 |
+| 9 | `gate_completed` | 回答ゲート判定の完了 |
+| 10 | `web_started` | Web相互検証の開始 |
+| 11 | `web_completed` | Web相互検証の完了 |
+| 12 | `no_info_completed` | 情報なし検知の完了 |
+| 13 | `confirmation_required` | HITL確認が必要な状態への遷移 |
+| 14 | `confirmation_resolved` | HITL確認の解決 |
+| 15 | `action_started` | 確認済みアクションの開始 |
+| 16 | `action_completed` | アクションの完了 |
+| 17 | `run_completed` | 実行全体の正常完了または有人エスカレーション確定 |
+| 18 | `run_failed` | 実行全体の失敗 |
+| 19 | `run_cancelled` | 実行全体のキャンセル |
 
 ### 8.1 `RunEvent`の形
 
@@ -594,6 +598,76 @@ interface RunEvent {
 
 > 📝 **注意**: イベント名の意味はクライアント側の購読名に基づく説明です。`data`の詳細スキーマはこのモジュールではイベント種別ごとに定義されていません。
 
+### 8.2 完了済みRunのイベント復元
+
+`EventSource`の接続先は、バックエンドのRun Storeに保存されたイベントを`Last-Event-ID`より後から返します。新しい`EventSource`の初回接続ではカーソルが`0`になるため、保存済みイベントを先頭から受信します。Runが`completed`、`escalated`、`cancelled`、`failed`のいずれかでも、残っているイベントを送信してからストリームを終了します。
+
+```mermaid
+flowchart LR
+    OPEN["EventSourceでRun IDへ接続"] --> CURSOR["Last-Event-ID 初回0"]
+    CURSOR --> STORE["Run Storeのevents_afterを取得"]
+    STORE --> REPLAY["保存済みイベントをID順に再送"]
+    REPLAY --> CALLBACK["onEventで画面履歴を復元"]
+    CALLBACK --> TERMINAL{"Runは終端状態か"}
+    TERMINAL -->|"はい"| CLOSE["ストリーム終了"]
+    TERMINAL -->|"いいえ"| WAIT["新規イベントを待機"]
+    WAIT --> STORE
+classDef default fill:#000,stroke:#fff,color:#fff
+classDef subgraphStyle fill:#1a1a1a,stroke:#fff,color:#fff
+class OPEN,CURSOR,STORE,REPLAY,CALLBACK,TERMINAL,CLOSE,WAIT default
+```
+
+> 📝 **注意**: `agentSupportClient.events()`自身はイベント配列を保持しません。受信イベントの保存とID重複排除は呼び出し元（現行`App.tsx`）が担当します。
+
+### 8.3 `SupportResult`の追加メタデータ
+
+`frontend/src/types/agentSupport.ts`の`SupportResult`はOpenAPI生成型を基礎にし、`citations`を必須の`string[]`として扱います。バックエンド`SupportResult`から次の監査・表示用フィールドも受け取ります。
+
+| フィールド | 型 / デフォルト | 説明 |
+|-----------|-----------------|------|
+| `escalation_reason` | `EscalationReason \| null` / `null` | エスカレーション理由。`insufficient_grounding`、`contradiction`、`no_information`、`forced_policy`、`identity_required`、`system_error`のいずれか |
+| `retrieved_source_count` | `number` / `0` | 検索・取得した出典数 |
+| `verified_source_count` | `number` / `0` | 検証済み出典数 |
+| `replan_count` | `number` / `0` | 実行中に完了した再計画の回数 |
+
+**戻り値例**:
+
+```typescript
+{
+  decision: 'escalate',
+  escalation_reason: 'insufficient_grounding',
+  retrieved_source_count: 4,
+  verified_source_count: 1,
+  replan_count: 2,
+  citations: [],
+}
+```
+
+### 8.4 ステップエラーイベント
+
+`step_completed`および途中状態を表す`executor_state`では、`data.step`にステップ結果が格納されます。失敗したステップは人向けメッセージ`error`に加え、機械判定用の`error_code`を持ち得ます。
+
+| `error_code` | 意味 |
+|-------------|------|
+| `timeout` | タイムアウト |
+| `tool_error` | ツール実行エラー |
+| `cancelled` | キャンセル |
+| `dependency_error` | 依存ステップ未完了 |
+| `validation_error` | 入力・設定エラー |
+
+```typescript
+// step_completed の data 例
+{
+  step: {
+    step_id: 2,
+    status: 'failed',
+    error: '検索サービスから応答がありませんでした',
+    error_code: 'timeout',
+  },
+  origin: 'replan',
+}
+```
+
 ---
 
 ## 9. エラーハンドリング
@@ -606,6 +680,7 @@ interface RunEvent {
 | 成功レスポンスが不正JSON | `response.json()`の例外を加工せず伝播 | API契約不整合として処理 |
 | `pending_confirmation`未設定 | 非nullアサーションは実行時検証を行わないため、プロパティ参照時に例外となり得る | `confirm()`前に`run.pending_confirmation`を確認 |
 | SSE接続エラー | `EventSource.onerror`が`onError`を呼ぶ。実装は自動的に`close()`しない | 必要なら購読解除関数を呼ぶ。ブラウザのEventSource再接続挙動を考慮 |
+| SSE再接続・イベント復元時の重複 | サーバーは`Last-Event-ID`より後を再送するが、画面側の再購読でも同じIDを受信し得る | `RunEvent.id`で重複を除外する（現行`App.tsx`は追加前にIDを確認） |
 | SSEペイロードが不正JSON | イベントリスナー内の`JSON.parse()`例外は捕捉されない | バックエンドのSSE契約を検証し、必要なら上位のエラー監視を行う |
 | 未登録イベント種別 | リスナーがないため`onEvent`へ渡されない | 新イベント追加時は`eventTypes`へ明示追加 |
 
@@ -625,6 +700,7 @@ body.detail.message が存在する
 | バージョン | 変更内容 |
 |-----------|---------|
 | 1.0 | 初版作成。REST操作、HITL確認、SSE 18イベント、エラー処理をIPO形式で文書化 |
+| 1.1 | `replan_completed`を含むSSE 19イベント、完了済みRunのイベント復元、結果メタデータ、ステップ`error_code`を追加 |
 
 ---
 

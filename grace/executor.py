@@ -61,6 +61,22 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+def classify_step_error(error: BaseException | str | None) -> str | None:
+    """Executorの例外・ツールエラーを安定したUI向けコードへ分類する。"""
+    if error is None:
+        return None
+    message = str(error).lower()
+    if isinstance(error, TimeoutError) or "timeout" in message or "タイムアウト" in message:
+        return "timeout"
+    if isinstance(error, ValueError) or "validation" in message or "invalid" in message:
+        return "validation_error"
+    if "cancel" in message or "キャンセル" in message:
+        return "cancelled"
+    if "depend" in message or "依存" in message:
+        return "dependency_error"
+    return "tool_error"
+
+
 # =============================================================================
 # 実行状態管理
 # =============================================================================
@@ -1042,6 +1058,9 @@ class Executor:
                 confidence=confidence,
                 sources=sources,
                 error=tool_result.error if not tool_result.success else None,
+                error_code=(
+                    classify_step_error(tool_result.error) if not tool_result.success else None
+                ),
                 execution_time_ms=execution_time,
                 token_usage=_step_tu,
             )
@@ -1063,6 +1082,7 @@ class Executor:
                 output=None,
                 confidence=0.0,
                 error=str(e),
+                error_code=classify_step_error(e),
                 execution_time_ms=execution_time,
                 token_usage=None,
             )
@@ -1351,6 +1371,7 @@ class Executor:
                 output=None,
                 confidence=0.0,
                 error=str(e),
+                error_code=classify_step_error(e),
                 execution_time_ms=0,
                 token_usage=None,
             )

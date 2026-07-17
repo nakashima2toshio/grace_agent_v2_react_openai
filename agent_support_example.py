@@ -92,6 +92,9 @@ DEFAULT_QUERY = "パスワードを忘れました"
 
 # 意図分類に使うOpenAI軽量モデル
 INTENT_MODEL = ModelConfig.LIGHT_MODEL
+# GPT-5 系は内部推論にも出力枠を使用する。10 tokens では Responses API が
+# 400 または空本文になり得るため、短い分類結果にも十分な枠を確保する。
+CLASSIFIER_MAX_OUTPUT_TOKENS = 1024
 
 
 # 組み込みプロファイル（自治体 / SaaS / EC）
@@ -156,7 +159,10 @@ def create_intent_classifier(config) -> Callable[[str], Optional[Intent]]:
             response = client.models.generate_content(
                 model=INTENT_MODEL,
                 contents=prompt,
-                config={"temperature": 0.0, "max_output_tokens": 10},
+                config={
+                    "temperature": 0.0,
+                    "max_output_tokens": CLASSIFIER_MAX_OUTPUT_TOKENS,
+                },
             )
             text = (response.text or "").strip().lower()
             for label in ("incident", "request", "question"):
@@ -242,7 +248,10 @@ def create_no_info_judge(config) -> Callable[[str, str], Optional[bool]]:
             response = client.models.generate_content(
                 model=INTENT_MODEL,
                 contents=prompt,
-                config={"temperature": 0.0, "max_output_tokens": 10},
+                config={
+                    "temperature": 0.0,
+                    "max_output_tokens": CLASSIFIER_MAX_OUTPUT_TOKENS,
+                },
             )
             text = (response.text or "").strip().lower()
             if "no_info" in text or "no-info" in text:
@@ -855,6 +864,24 @@ def execute_support_workflow(
                 gres_web.support_rate, gres_web.verified, len(web_citations),
                 notify_th, confirm_th,
             )
+            # Responses API が groundedness の構造化本文を返せず判定不能でも、
+            # Web 本文に基づく実質回答・出典あり・矛盾なしなら、内部回答と同じ
+            # 救済規則を適用する。直後の ④' No-info ゲートは維持するため、
+            # 「確認方法だけ」の回答や分類失敗は安全側へ戻される。
+            if _should_rescue_unaffirmed(
+                w_decision,
+                forced_escalate,
+                contradiction,
+                len(web_citations),
+                web_answer,
+                query,
+                no_info_judge,
+            ):
+                w_decision, w_warning = "answer", True
+                print(
+                    "  [gate] Web groundedness は判定不能だが、矛盾なし・出典付きの"
+                    "実質回答 → answer（未確認注記）として ④' へ送る"
+                )
             g_rate, g_decided = _pick_groundedness(gres, gres_web)
             support = SupportResult(
                 answer=web_answer if w_decision == "answer" else internal_answer,

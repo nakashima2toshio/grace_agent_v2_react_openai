@@ -1,0 +1,89 @@
+{
+  "executed_at": "2026-07-17T11:58:29.982705+00:00",
+  "conditions": {
+    "query": "住民票を取得したい。",
+    "vertical": "gov",
+    "model": "gpt-5-mini",
+    "streamlit_collection_policy": "all searchable 3072D collections",
+    "react_allowed_collections": [
+      "gov_faq_ollama"
+    ],
+    "collection_scope_equal": false,
+    "hybrid_search": true,
+    "web": true,
+    "action": true,
+    "dry_run": true
+  },
+  "streamlit": {
+    "engine": "services.agent_service.ReActAgent (Streamlit Agent Chat)",
+    "answer": "住民票（住民票の写し・記載事項証明書）を取得するための一般的な手順と注意点をまとめます。\n\n1) 取得方法（主な選択肢）\n- 窓口（市区町村役所・区役所・支所）\n  - 即日発行が可能です。窓口の開庁時間内に申請してください。\n- 郵送申請\n  - 申請書、本人確認書類のコピー、手数料（自治体によっては定額小為替）、返信用封筒等を同封して送付します。発行まで日数がかかります。\n- コンビニ交付（マイナンバーカード所持者）\n  - 対応自治体のみ利用可。マイナンバーカードと署名用電子証明書の暗証番号（4桁）が必要です。\n- オンライン（マイナポータル等を利用）\n  - 対応状況や条件は自治体ごとに異なります。事前に確認してください。\n\n2) 必要書類・持ち物（一般的）\n- 本人が窓口で取得する場合：\n  - 本人確認書類（運転免許証、マイナンバーカード、パスポート、在留カードなど）。自治体により必要な組合せが異なる場合があります。\n  - 手数料（現金が一般的）。\n- 代理取得の場合：\n  - 委任状（自治体指定様式がある場合あり）、委任者の本人確認書類のコピー、代理人の本人確認書類。印鑑を求められる場合もあります。\n- 郵送申請の場合：\n  - 各自治体の申請書（Webでダウンロードできる場合が多い）、本人確認書類の写し、手数料支払方法に沿った処理、返信用封筒（切手貼付）等。\n\n3) 住民票の種類や記載内容について\n- 「住民票の写し」や「記載事項証明書」など名称や扱いが自治体で若干異なる場合があります。\n- 本籍の記載、",
+    "answer_length": 672,
+    "urls": [],
+    "tool_calls": [],
+    "tool_result_count": 0,
+    "event_count": 7
+  },
+  "react": {
+    "engine": "services.agent_support_service.AgentSupportService (React API)",
+    "state": "completed",
+    "error": null,
+    "decision": "answer",
+    "escalation_reason": null,
+    "answer": "結論（簡潔）  \n住民票は、コンビニのマルチコピー機（キオスク端末）や市区町村の窓口、マイナンバーカードを使ったオンライン申請などで取得できる旨が、提供された社内ナレッジに記載されています。\n\n取得方法（参照付き・箇条書き）\n- コンビニ等のマルチコピー機（キオスク端末）で取得可能であることが記載されています。操作手順に関する案内もあります。  \n  社内ナレッジ（情報源 1、情報源 6）によると、全国どこでも最寄りのコンビニ等の端末から証明書を取得できるとあります。\n- 区役所・行政サービスコーナー等の窓口で請求できる旨が記載されています。  \n  社内ナレッジ（情報源 2、情報源 8）によると、区役所・行政サービスコーナーなどで住民票の写しを請求できます。\n- マイナンバーカード（署名用電子証明書が有効なもの）を使ったオンライン申請により、スマートフォン等から申請できるサービスの記載があります。  \n  社内ナレッジ（情報源 5）によると、署名用電子証明書が有効なマイナンバーカードがあればオンラインで申請できる旨が示されています。\n- 代理で請求する場合の注意として、別世帯の方の住民票を請求する際は委任状が必要である旨の記載があります。  \n  社内ナレッジ（情報源 4）によると、親族であっても別世帯の方の住民票請求には委任状が必要とあります。\n- 自治体によっては、電話予約で平日受付→翌土日祝日に区役所等で受け取れる制度がある旨の記載（自治体の例）があります。  \n  社内ナレッジ（情報源 3）によると、平日に電話で予約すると翌土日祝日に区役所宿直室で受け取れるケースがあるとあります。\n- 料金の例として、札幌市ではコンビニ交付の住民票が1通200円で取得できる旨の案内がありました（自治体ごとに詳細は異なる場合があります）。  \n  社内ナレッジ（情報源 7）によると、札幌市の例で1通200円と記載されています。\n\n次のおすすめの実務的手順（参照に基づく簡単な提案）\n- まずはお住まいの市区町村の公式窓口ページや担当窓口（区役所・行政サービスコーナー等）で、受付場所・必要書類・手数料・オンライン対応の有無などを確認してください（窓口案内に関する記載があります）。  \n  社内ナレッジ（情報源 2、情報源 8）によると、窓口での請求方法が案内されています。\n\n備考\n- 提供された情報源に記載のない具体的な手数料の全国共通額や、各自治体ごとの詳細な受付時間・必要書類の一覧などは、該当する自治体の公式ページまたは担当窓口でご確認ください。該当情報が必要であれば、自治体の公式案内ページをご参照いただくことをおすすめします。  \n\n必要であれば、上記参照のうちどの情報源に何が書かれているかをさらに詳しく引用して示すこともできます（個人情報はお聞きしません）。",
+    "answer_length": 1198,
+    "citations": [
+      "[Web] https://www.lg-waps.go.jp/01-00.html",
+      "[Web] https://www.city.yokohama.lg.jp/kurashi/koseki-zei-hoken/todokede/koseki-juminhyo/shoumei/jyuminhyou/mado.html",
+      "[Web] https://www.city.osaka.lg.jp/shimin/page/0000369790.html",
+      "[Web] https://www.city.kita.lg.jp/living/registration/1001590/1001591/1001592.html",
+      "[Web] https://www.city.fukuoka.lg.jp/shimin/kusei/life/juuminhyoutou_shoumei.html",
+      "[Web] https://digital-agency-news.digital.go.jp/articles/2024-10-08",
+      "[Web] https://www.city.sapporo.jp/shimin/koseki/shomei/juminhyo.html",
+      "[Web] https://www.city.kawasaki.jp/250/page/0000036883.html"
+    ],
+    "urls": [
+      "https://www.lg-waps.go.jp/01-00.html",
+      "https://www.city.yokohama.lg.jp/kurashi/koseki-zei-hoken/todokede/koseki-juminhyo/shoumei/jyuminhyou/mado.html",
+      "https://www.city.osaka.lg.jp/shimin/page/0000369790.html",
+      "https://www.city.kita.lg.jp/living/registration/1001590/1001591/1001592.html",
+      "https://www.city.fukuoka.lg.jp/shimin/kusei/life/juuminhyoutou_shoumei.html",
+      "https://digital-agency-news.digital.go.jp/articles/2024-10-08",
+      "https://www.city.sapporo.jp/shimin/koseki/shomei/juminhyo.html",
+      "https://www.city.kawasaki.jp/250/page/0000036883.html"
+    ],
+    "used_web": true,
+    "retrieved_source_count": 8,
+    "verified_source_count": 8,
+    "action": null,
+    "pending_confirmation": false
+  },
+  "comparison": {
+    "term_presence": {
+      "窓口": {
+        "streamlit": true,
+        "react": true
+      },
+      "コンビニ": {
+        "streamlit": true,
+        "react": true
+      },
+      "マイナンバーカード": {
+        "streamlit": true,
+        "react": true
+      },
+      "自治体": {
+        "streamlit": true,
+        "react": true
+      }
+    },
+    "shared_urls": [],
+    "checks": {
+      "streamlit_answer_nonempty": true,
+      "react_terminal_without_error": true,
+      "faq_did_not_create_action": true,
+      "react_answer_or_safe_escalation": true
+    },
+    "passed": true,
+    "note": "両画面は異なるオーケストレーションを使用するため、回答文の完全一致は受入条件にしない。Streamlitは全検索可能コレクション、Reactはgovの許可コレクションを使う設計差も保持する。FAQでActionを生成せず、Reactが回答または理由付きの安全なエスカレーションで終端することを必須条件とする。"
+  }
+}

@@ -1,6 +1,6 @@
 # App.tsx - GRACE Support メイン画面 ドキュメント
 
-**Version 1.0** | 最終更新: 2026-07-17
+**Version 1.1** | 最終更新: 2026-07-17
 
 ---
 
@@ -25,9 +25,10 @@
 
 ### 主な責務
 
-- 問い合わせ、業界プロファイル、実行オプションを入力する
+- 問い合わせ、必須の業界プロファイル、実行オプションを入力する
 - エージェント実行を作成し、SSEイベントと最新状態を同期する
-- Plan、Execute、Groundedness、回答ゲート、Web検証、Actionの進捗と結果を表示する
+- 最新revisionのPlan、確定Step、試行履歴、Groundedness、回答ゲート、Web検証、Actionを表示する
+- 自動回答と有人エスカレーションを分離し、検証不能な回答本文を表示しない
 - HITLの承認、却下、Action引数修正を受け付ける
 - 実行IDをブラウザに保存し、画面再読み込み後に実行を復元する
 - 過去の実行を取得し、選択した実行を再表示する
@@ -38,16 +39,19 @@
 |---|------|--------------|------|
 | 1 | 問い合わせ条件の入力 | `App.tsx` | 制御されたフォームとEC向け本人確認入力を描画 |
 | 2 | 実行作成と状態同期 | `App.tsx`, `api/agentSupportClient.ts` | REST APIとSSE購読を組み合わせて同期 |
-| 3 | 進捗と結果の表示 | `App.tsx`, `components/WorkflowTimeline.tsx` | 段階表示、指標、計画、実行結果、回答を描画 |
-| 4 | HITL判断 | `App.tsx`, `api/agentSupportClient.ts` | approve/reject/modifyを確認APIへ送信 |
-| 5 | 実行復元 | `App.tsx` | `localStorage` の実行IDを利用 |
-| 6 | 実行履歴の再表示 | `App.tsx`, `api/agentSupportClient.ts` | 履歴取得と選択時の状態切替を実行 |
+| 3 | 進捗と結果の表示 | `App.tsx`, `components/WorkflowTimeline.tsx` | 最新計画、確定Step、試行履歴、検証指標を描画 |
+| 4 | 安全な回答・エスカレーション表示 | `App.tsx` | decisionを分岐し、エスカレーション時は理由だけを表示 |
+| 5 | HITL判断 | `App.tsx`, `api/agentSupportClient.ts` | approve/reject/modifyを確認APIへ送信 |
+| 6 | 実行復元 | `App.tsx` | `localStorage` の実行IDを利用 |
+| 7 | 実行履歴の再表示 | `App.tsx`, `api/agentSupportClient.ts` | 履歴取得と選択時の状態切替を実行 |
 
 ### 主要機能一覧
 
 | 機能 | 説明 |
 |------|------|
 | `App()` | メイン画面全体と状態管理を提供する既定エクスポートコンポーネント |
+| `selectFinalSteps()` | `step_completed` をstep IDごとの確定結果へ集約 |
+| `formatStepError()` | Stepの構造化エラーコードを日本語ラベルへ変換 |
 | `submit()` | フォーム入力から新規実行を作成 |
 | `loadHistory()` | 実行履歴を取得 |
 | `decide()` | 承認または却下を送信 |
@@ -97,12 +101,12 @@ style SERVICE fill:#1a1a1a,stroke:#fff,color:#fff
 
 ### 1.2 データフロー
 
-1. 利用者が問い合わせと業界プロファイル、Web検証・Action・Dry runの設定を入力します。
+1. 利用者が問い合わせと必須の業界プロファイル、Web検証・Action・Dry runの設定を入力します。
 2. `submit()` が実行を作成し、返された `run_id` を `localStorage` とReact stateへ保存します。
-3. 実行中はSSEを購読し、重複しないイベントを `events` に追加します。
-4. イベント受信ごとに最新の `RunRecord` を取得し、進捗・Plan・Execute結果を再描画します。
+3. 実行IDがある間はSSEを購読し、重複しないイベントを `events` に追加します。
+4. イベント受信ごとに最新の `RunRecord` を取得し、最新Plan revisionと確定Stepを再描画します。
 5. 確認待ちでは利用者の approve/reject/modify をバックエンドへ送ります。
-6. 完了後は検証指標、回答または有人エスカレーション、出典を表示します。
+6. 完了後はGroundednessの判定可否、取得／検証出典数、回答または理由別の有人エスカレーションを表示します。
 
 ### 1.3 画面操作シーケンス
 
@@ -149,7 +153,7 @@ flowchart LR
         RUN["run"]
         EVENTS["events"]
         HISTORY["history"]
-        VIEW["busy・plan・executed"]
+        VIEW["busy・plan・revision・確定Step・試行履歴"]
     end
     subgraph EFFECTS["副作用"]
         RESTORE["保存実行の復元"]
@@ -161,6 +165,8 @@ flowchart LR
         LOAD["loadHistory"]
         DECIDE["decide"]
         MODIFY["modify"]
+        FINAL["selectFinalSteps"]
+        ERROR["formatStepError"]
     end
     subgraph RENDER["表示関数"]
         APP["App"]
@@ -170,12 +176,14 @@ flowchart LR
     STATE --> APP
     EFFECTS --> STATE
     HANDLERS --> STATE
+    FINAL --> STATE
+    ERROR --> APP
     APP --> HANDLERS
     APP --> TITLE
     APP --> METRIC
 classDef default fill:#000,stroke:#fff,color:#fff
 classDef subgraphStyle fill:#1a1a1a,stroke:#fff,color:#fff
-class FORM,RUN,EVENTS,HISTORY,VIEW,RESTORE,STREAM,ARGS,SUBMIT,LOAD,DECIDE,MODIFY,APP,TITLE,METRIC default
+class FORM,RUN,EVENTS,HISTORY,VIEW,RESTORE,STREAM,ARGS,SUBMIT,LOAD,DECIDE,MODIFY,FINAL,ERROR,APP,TITLE,METRIC default
 style STATE fill:#1a1a1a,stroke:#fff,color:#fff
 style EFFECTS fill:#1a1a1a,stroke:#fff,color:#fff
 style HANDLERS fill:#1a1a1a,stroke:#fff,color:#fff
@@ -225,6 +233,8 @@ style RENDER fill:#1a1a1a,stroke:#fff,color:#fff
 | `loadHistory()` | 実行履歴の読込み |
 | `decide(decision)` | approve/reject判断の送信 |
 | `modify()` | 編集済みAction引数によるmodify判断の送信 |
+| `selectFinalSteps(events)` | 確定イベントをstep ID単位に集約して昇順化 |
+| `formatStepError(step)` | `error_code` を日本語分類名へ変換して詳細と結合 |
 
 ### 3.3 state・派生値・effect一覧
 
@@ -237,10 +247,12 @@ style RENDER fill:#1a1a1a,stroke:#fff,color:#fff
 | state | `error` | `string` | トーストに表示するエラー |
 | state | `editedArgs` | `string` | 編集中のAction引数JSON |
 | 派生値 | `busy` | `run` | 終端状態以外なら `true` |
-| memo | `plan` | `events` | 最新配列内の最初の `plan_completed` の計画 |
-| memo | `executed` | `events` | `executor_state` のステップ一覧 |
+| memo | `plan` | `events` | `plan_completed` / `replan_completed` の最後の計画 |
+| memo | `planRevision` | `events` | replan回数 + 1 の表示revision |
+| memo | `executed` | `events` | `step_completed` をIDごとに集約した確定Step |
+| memo | `executionAttempts` | `events` | `executor_state` に含まれる途中の試行履歴 |
 | effect | 実行復元 | 初回のみ | 保存済み `run_id` の実行を取得 |
-| effect | SSE同期 | `run?.run_id`, `busy` | 実行中だけイベントを購読 |
+| effect | SSE同期 | `run?.run_id` | 実行IDがある間イベントを購読 |
 | effect | Action引数同期 | `run?.pending_confirmation` | 確認対象の引数を整形JSONへ変換 |
 
 ---
@@ -264,7 +276,7 @@ export default function App(): JSX.Element
 | 項目 | 内容 |
 |------|------|
 | **Input** | 利用者のフォーム操作、SSEイベント、REST API応答、`localStorage` の実行ID |
-| **Process** | 1. stateと派生値を構成<br>2. 保存実行とSSEを同期<br>3. ハンドラでAPI操作<br>4. 実行状態に応じて入力・進捗・確認・回答を条件描画 |
+| **Process** | 1. stateと派生値を構成<br>2. 保存実行とSSEを同期<br>3. Plan revisionと確定Stepをイベントから集約<br>4. ハンドラでAPI操作<br>5. 実行状態とdecisionに応じて入力・進捗・確認・回答／エスカレーションを条件描画 |
 | **Output** | `JSX.Element`: GRACE Supportメイン画面 |
 
 **戻り値例**:
@@ -348,7 +360,72 @@ function Metric(props: { k: string; v: string }): JSX.Element
 // 出力: Groundedness指標カード
 ```
 
-### 4.2 イベントハンドラ
+### 4.2 イベント集約・表示変換関数
+
+#### `selectFinalSteps`
+
+**概要**: `step_completed` イベントだけを抽出し、同じ `step_id` は後のイベントで上書きして、確定Stepを昇順で返します。イベント直下の `origin` が文字列ならStepへ引き継ぎます。
+
+```typescript
+export function selectFinalSteps(events: RunEvent[]): StepData[]
+```
+
+| パラメータ | 型 | デフォルト | 説明 |
+|------------|----|-----------|------|
+| `events` | `RunEvent[]` | - | 実行中に受信したイベント配列 |
+
+| 項目 | 内容 |
+|------|------|
+| **Input** | `events: RunEvent[]` |
+| **Process** | 1. `step_completed` かつ `data.step` があるイベントを抽出<br>2. Stepを複製し、必要なら `origin` を付与<br>3. `Map<number, StepData>` へstep IDをキーに格納<br>4. step ID昇順で返却 |
+| **Output** | `StepData[]`: 各step IDにつき最後の確定結果1件 |
+
+**戻り値例**:
+
+```typescript
+[
+  { step_id: 1, status: 'completed', origin: 'planned', confidence: 0.91 },
+  { step_id: 2, status: 'failed', origin: 'replan', error_code: 'timeout' },
+]
+```
+
+```typescript
+// 使用例
+const finalSteps = selectFinalSteps(events)
+// 出力: step_id順に並んだ重複のない確定Step
+```
+
+#### `formatStepError`
+
+**概要**: Stepにエラーがある場合、`error_code` を定義済みの日本語分類名へ変換し、バックエンドの詳細文と結合します。未知コードは「実行エラー」、エラー本文なしは空文字列です。
+
+```typescript
+export function formatStepError(step: StepData): string
+```
+
+| パラメータ | 型 | デフォルト | 説明 |
+|------------|----|-----------|------|
+| `step` | `StepData` | - | `error` と任意の `error_code` を持つStep |
+
+| 項目 | 内容 |
+|------|------|
+| **Input** | `step.error`, `step.error_code` |
+| **Process** | 1. `error` がなければ空文字列<br>2. コードを `stepErrorLabels` で日本語化<br>3. 分類名と詳細をコロンで結合 |
+| **Output** | `string`: 日本語分類付きエラーメッセージ |
+
+**戻り値例**:
+
+```typescript
+'タイムアウト: Qdrant search timed out'
+```
+
+```typescript
+// 使用例
+formatStepError({ step_id: 1, status: 'failed', error_code: 'timeout', error: '30秒を超過' })
+// 出力: タイムアウト: 30秒を超過
+```
+
+### 4.3 イベントハンドラ
 
 #### `submit`
 
@@ -470,7 +547,7 @@ undefined
 // 出力: 編集済みActionを含む確認結果がrunへ反映される
 ```
 
-### 4.3 副作用（`useEffect`）
+### 4.4 副作用（`useEffect`）
 
 #### 保存済み実行の復元effect
 
@@ -503,21 +580,20 @@ undefined
 
 #### SSE同期effect
 
-**概要**: 実行中だけSSEを購読し、イベントをIDで重複排除しながら追加し、実行状態も再取得します。
+**概要**: 実行IDがある間SSEを購読し、イベントをIDで重複排除しながら追加し、実行状態も再取得します。
 
 ```typescript
-useEffect((): void | (() => void) => { /* subscribe events */ }, [run?.run_id, busy])
+useEffect((): void | (() => void) => { /* subscribe events */ }, [run?.run_id])
 ```
 
 | パラメータ | 型 | デフォルト | 説明 |
 |------------|----|-----------|------|
 | `run?.run_id` | `string \| undefined` | - | 購読対象実行 |
-| `busy` | `boolean` | - | 購読可否 |
 
 | 項目 | 内容 |
 |------|------|
-| **Input** | 実行ID、実行中フラグ、SSEイベント |
-| **Process** | 1. 実行中でなければ終了<br>2. `events()` で購読<br>3. イベントIDを重複排除<br>4. イベント・エラー時に最新実行を取得<br>5. cleanupでSSEを閉じる |
+| **Input** | 実行ID、SSEイベント |
+| **Process** | 1. 実行IDがなければ終了<br>2. `events()` で購読<br>3. イベントIDを重複排除<br>4. イベント・エラー時に最新実行を取得<br>5. cleanupでSSEを閉じる |
 | **Output** | `void \| (() => void)`: 未購読または購読解除関数 |
 
 **戻り値例**:
@@ -527,7 +603,7 @@ useEffect((): void | (() => void) => { /* subscribe events */ }, [run?.run_id, b
 ```
 
 ```typescript
-// 使用例: run_idまたはbusyの変更時にReactが自動実行
+// 使用例: run_idの変更時にReactが自動実行
 // 出力: eventsとrunが継続的に同期される
 ```
 
@@ -573,7 +649,7 @@ useEffect((): void => { /* format action args */ }, [run?.pending_confirmation])
 ```typescript
 const initial: RunRequest = {
   query: '',
-  vertical: 'saas',
+  vertical: null,
   use_web: true,
   do_action: true,
   dry_run: true,
@@ -583,7 +659,7 @@ const initial: RunRequest = {
 | キー | デフォルト値 | 説明 |
 |-----|-------------|------|
 | `query` | `''` | 問い合わせ本文 |
-| `vertical` | `'saas'` | 初期業界プロファイル |
+| `vertical` | `null` | 未選択。`select required` により利用者の選択を必須化 |
 | `use_web` | `true` | Web相互検証を有効化 |
 | `do_action` | `true` | Action候補生成を有効化 |
 | `dry_run` | `true` | Dry runを有効化 |
@@ -593,11 +669,32 @@ const initial: RunRequest = {
 | 型 | 用途 |
 |----|------|
 | `PlanData` | `plan_completed` イベント内の計画表示 |
-| `StepData` | `executor_state` イベント内のステップ表示 |
+| `StepData` | 確定Stepと試行履歴の表示。`origin`、`error`、`error_code` も保持 |
 
-### 5.3 終端状態
+### 5.3 エラー・エスカレーション表示辞書
 
-`completed`、`escalated`、`cancelled`、`failed` を終端状態として扱います。いずれかに達すると `busy` は `false` となり、SSE購読を停止し、「新しい問い合わせ」を表示します。
+| 定数 | キー | 表示方針 |
+|------|------|----------|
+| `stepErrorLabels` | `timeout`, `tool_error`, `cancelled`, `dependency_error`, `validation_error` | Stepの `error_code` を日本語分類へ変換。未知コードは「実行エラー」 |
+| `escalationLabels` | `insufficient_grounding`, `contradiction`, `no_information`, `forced_policy`, `identity_required`, `system_error` | エスカレーション理由を利用者向け日本語文へ変換 |
+
+エスカレーション時は `run.result.answer` を表示しません。`escalation_reason` に対応する安全な説明文だけを表示し、未知理由は「十分な根拠が得られなかったため、自動回答を停止しました。」へフォールバックします。
+
+### 5.4 結果表示規則
+
+| 表示項目 | 条件・内容 |
+|----------|-----------|
+| PLAN | `plan_completed` と `replan_completed` の最後の計画を `PLAN vN` として表示 |
+| EXECUTE | `step_completed` の確定結果だけを通常表示し、`executor_state` は折りたたみ試行履歴へ表示 |
+| Groundedness | `groundedness_decided > 0` の場合だけ百分率。それ以外は「判定不能」 |
+| 取得／検証出典 | `retrieved_source_count/verified_source_count` を表示。結果前は `0/0` |
+| 出典本文 | `citations` を「参照した出典」として表示し、URLを含む場合は外部リンク化 |
+| 回答本文 | `decision === 'answer'` の場合だけ表示 |
+| 長文 | 回答は `white-space: pre-wrap`、出典リンクは `overflow-wrap: anywhere` を `details.css` で適用 |
+
+### 5.5 終端状態
+
+`completed`、`escalated`、`cancelled`、`failed` を終端状態として扱います。いずれかに達すると `busy` は `false` となり、実行開始ボタンの抑止と中止ボタンの表示を解除し、「新しい問い合わせ」を表示します。SSE購読の継続条件は `busy` ではなく `run_id` です。
 
 ---
 
@@ -607,12 +704,12 @@ const initial: RunRequest = {
 
 ```tsx
 // 使用例
-// 1. 問い合わせと業界を入力
+// 1. 問い合わせを入力し、必須の業界を選択
 // 2. 必要な実行オプションを選択
 // 3. 「実行を開始」を押す
-// 4. タイムラインとPlan・Execute結果を確認
+// 4. タイムライン、最新Plan revision、確定Stepを確認
 // 5. 確認要求があればAction引数を確認して承認・却下・修正
-// 6. 回答、検証指標、出典を確認
+// 6. 回答またはエスカレーション理由、判定可否、取得／検証出典を確認
 ```
 
 ### 6.2 実行復元と履歴切替
@@ -630,13 +727,15 @@ const initial: RunRequest = {
 
 ## 7. エクスポート
 
-本モジュールに `__all__` 相当の明示的エクスポート一覧はありません。
+本モジュールは既定コンポーネントに加え、Step集約・表示変換のテスト可能な要素を名前付きエクスポートします。
 
 ```typescript
 export default App
+export type StepData
+export { selectFinalSteps, formatStepError }
 ```
 
-`Title`、`Metric`、内部ハンドラ、ローカル型はモジュール外へエクスポートされません。
+`Title`、`Metric`、内部ハンドラ、`PlanData` はモジュール外へエクスポートされません。
 
 ---
 
@@ -645,6 +744,7 @@ export default App
 | バージョン | 変更内容 |
 |-----------|---------|
 | 1.0 | `App.tsx` の画面、state、effect、ハンドラ、HITL操作を実コードに基づき初版文書化 |
+| 1.1 | 確定Step集約、Plan revision、業界必須、判定不能表示、取得／検証出典、エスカレーション本文抑止、構造化Stepエラー日本語化、長文改行を反映 |
 
 ---
 
