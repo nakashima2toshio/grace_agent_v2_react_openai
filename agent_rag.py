@@ -130,7 +130,7 @@ def show_rag_data_creation_page():
         ./start_celery.sh restart -c 8 --flower
         ```
 
-        `.env` に LLM 用 `ANTHROPIC_API_KEY` と Embedding 用 `GEMINI_API_KEY` / `GOOGLE_API_KEY` を設定しておきます。
+        `.env` に LLM 用 `OPENAI_API_KEY` と Embedding 用 `GEMINI_API_KEY` / `GOOGLE_API_KEY` を設定しておきます。
 
         #### ① チャンク作成（CSV / テキスト → チャンクCSV）
 
@@ -260,11 +260,11 @@ def main():
     """メインアプリケーション - 画面選択"""
 
     # ページ設定
-    st.set_page_config(page_title="Agent RAG (Anthropic)", page_icon="🤖", layout="wide")
+    st.set_page_config(page_title="Agent RAG (OpenAI)", page_icon="🤖", layout="wide")
 
     # サイドバー：画面選択
     with st.sidebar:
-        st.title("Agent RAG (Anthropic)")
+        st.title("Agent RAG (OpenAI)")
         st.divider()
 
         # メニュー見出し
@@ -295,7 +295,7 @@ def main():
             }[x],
             label_visibility="collapsed",
         )
-        st.markdown("全ソースは： [GitHub: nakashima2toshio/anthropic_grace_agent_v2](https://github.com/nakashima2toshio/anthropic_grace_agent_v2)")
+        st.markdown("全ソースは： [GitHub: nakashima2toshio/grace_agent_v2_react_openai](https://github.com/nakashima2toshio/grace_agent_v2_react_openai)")
         st.divider()
 
     # 選択された画面を表示

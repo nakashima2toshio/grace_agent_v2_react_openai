@@ -16,6 +16,7 @@ from agent_support_example import (
     _answer_gate,
     _citation_text,
     _collect_citations,
+    _collect_evidence_texts,
     _decide_action,
     _detect_no_info_answer,
     _match_keyword,
@@ -28,6 +29,24 @@ from agent_support_example import (
 GOV = PROFILES["gov"]
 SAAS = PROFILES["saas"]
 EC = PROFILES["ec"]
+
+
+def test_collect_evidence_texts_uses_payload_content_not_source_url():
+    steps = [SimpleNamespace(output=str([
+        {"payload": {"source": "https://example.com", "answer": "住民票は窓口で取得できます"}},
+        {"payload": {"source": "faq.csv", "content": "本人確認書類が必要です"}},
+    ]))]
+
+    assert _collect_evidence_texts(steps) == [
+        "住民票は窓口で取得できます",
+        "本人確認書類が必要です",
+    ]
+
+
+def test_collect_evidence_texts_excludes_reasoning_free_text():
+    steps = [SimpleNamespace(output="生成した回答本文")]
+
+    assert _collect_evidence_texts(steps) == []
 
 
 def classify_as(label):

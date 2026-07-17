@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import App from '../App'
+import App, { selectFinalSteps } from '../App'
+import type { RunEvent } from '../types/agentSupport'
 
 class EventSourceMock { addEventListener() {} close() {} onerror = () => {} }
 globalThis.EventSource = EventSourceMock as unknown as typeof EventSource
@@ -16,6 +17,7 @@ test('submits and renders grounded answer', async () => {
   }) as typeof fetch
   render(<App />)
   fireEvent.change(screen.getByPlaceholderText(/返品したい/), { target: { value: '質問です' } })
+  fireEvent.change(screen.getByLabelText('業界プロファイル'), { target: { value: 'saas' } })
   fireEvent.click(screen.getByRole('button', { name: /実行を開始/ }))
   await waitFor(() => expect(screen.getByText('根拠付き回答')).toBeInTheDocument())
   expect(screen.getByText('[社内] FAQ')).toBeInTheDocument()
@@ -26,19 +28,39 @@ test('renders escalation without presenting an automatic answer', async () => {
     ok: true,
     json: async () => ({
       run_id: 'escalate-test', request: {}, state: 'escalated',
-      result: { answer: null, citations: [], groundedness: 0,
+      result: { answer: '利用者へ提示してはいけない未検証回答', citations: [], groundedness: 0,
         groundedness_decided: 0, decision: 'escalate', warning: false,
         used_web: false, web_reused: false, contradiction: false,
-        forced_escalate: true, no_info_detected: false }, created_at: '', updated_at: '',
+        forced_escalate: false, no_info_detected: false,
+        escalation_reason: 'insufficient_grounding' }, created_at: '', updated_at: '',
     }),
   }) as typeof fetch
   render(<App />)
   fireEvent.change(screen.getByPlaceholderText(/返品したい/), { target: { value: '障害です' } })
+  fireEvent.change(screen.getByLabelText('業界プロファイル'), { target: { value: 'saas' } })
   fireEvent.click(screen.getByRole('button', { name: /実行を開始/ }))
 
   await waitFor(() => expect(screen.getByText('有人対応へ引き継ぎます')).toBeInTheDocument())
-  expect(screen.getByText(/自動回答を停止/)).toBeInTheDocument()
-  expect(screen.getByText('あり')).toBeInTheDocument()
+  expect(screen.getByText(/根拠を十分に検証できません/)).toBeInTheDocument()
+  expect(screen.queryByText('利用者へ提示してはいけない未検証回答')).not.toBeInTheDocument()
+  expect(screen.getByText('判定不能')).toBeInTheDocument()
+})
+
+test('selects only the latest completed result for each logical step', () => {
+  const event = (id: number, type: string, step: object): RunEvent => ({
+    id, type, state: 'executing', data: { step }, created_at: '',
+  })
+  const events = [
+    event(1, 'executor_state', { step_id: 1, status: 'failed' }),
+    event(2, 'step_completed', { step_id: 1, status: 'failed' }),
+    event(3, 'step_completed', { step_id: 1, status: 'success', confidence: 0.65 }),
+    event(4, 'step_completed', { step_id: 2, status: 'success' }),
+  ]
+
+  expect(selectFinalSteps(events)).toEqual([
+    { step_id: 1, status: 'success', confidence: 0.65 },
+    { step_id: 2, status: 'success' },
+  ])
 })
 
 test('modifies a pending HITL action without executing it', async () => {
@@ -62,6 +84,7 @@ test('modifies a pending HITL action without executing it', async () => {
 
   render(<App />)
   fireEvent.change(screen.getByPlaceholderText(/返品したい/), { target: { value: 'バグです' } })
+  fireEvent.change(screen.getByLabelText('業界プロファイル'), { target: { value: 'saas' } })
   fireEvent.click(screen.getByRole('button', { name: /実行を開始/ }))
   const editor = await screen.findByLabelText('Action引数')
   fireEvent.change(editor, { target: { value: '{"query":"新内容"}' } })

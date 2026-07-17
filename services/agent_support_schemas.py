@@ -11,6 +11,14 @@ from pydantic import BaseModel, Field
 Decision = Literal["answer", "escalate"]
 ActionType = Literal["create_ticket", "send_reply", "escalate_to_human"]
 Intent = Literal["question", "request", "incident"]
+EscalationReason = Literal[
+    "insufficient_grounding",
+    "contradiction",
+    "no_information",
+    "forced_policy",
+    "identity_required",
+    "system_error",
+]
 
 
 class ExecutionState(str, Enum):
@@ -95,6 +103,10 @@ class SupportResult(BaseModel):
     identity_checked: bool = False
     no_info_detected: bool = False
     web_reused: bool = False
+    escalation_reason: EscalationReason | None = None
+    retrieved_source_count: int = 0
+    verified_source_count: int = 0
+    replan_count: int = 0
 
 
 class RunEvent(BaseModel):

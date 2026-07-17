@@ -1,7 +1,80 @@
 # GRACE Agent Support React Frontend ドキュメント
 
-> **対象**: `frontend/`  
-> **バージョン**: 1.0  
+## このアプリの実行方法
+
+### 前提条件
+
+- Docker / Docker Compose
+- Python環境と`uv`
+- Node.js / npm
+- リポジトリ直下の`.env`または環境変数に`OPENAI_API_KEY`を設定済み
+- 検索対象のQdrantコレクションを登録済み（コレクションは本アプリから自動作成しません）
+
+### 1. QdrantとRedisを起動する
+
+リポジトリのルートディレクトリで実行します。
+
+```bash
+docker-compose -f docker-compose/docker-compose.yml up -d
+```
+
+起動確認:
+
+```bash
+docker-compose -f docker-compose/docker-compose.yml ps
+```
+
+### 2. FastAPIバックエンドを起動する
+
+同じくリポジトリのルートディレクトリで実行します。
+
+```bash
+export AGENT_SUPPORT_STORE=redis
+uv run uvicorn api.app:app --reload --port 8000
+# ブラウザで： http://localhost:5173/
+```
+- ポート解放：
+```aiignore
+lsof -i :8000
+kill -9 PID
+```
+
+`AGENT_SUPPORT_STORE=redis`を指定すると、Run、イベント、確認待ちActionがRedisへ保存されます。省略した場合はインメモリ保存となり、バックエンド再起動時に実行履歴が失われます。
+
+別のターミナルからバックエンドを確認できます。
+
+```bash
+curl http://localhost:8000/health
+curl http://localhost:8000/ready
+```
+
+- `/health`が`{"status":"ok"}`ならFastAPIは起動済みです。
+- `/ready`ではAPIキー、Qdrant、Redisの状態を確認できます。
+
+### 3. Reactフロントエンドを起動する
+
+バックエンドを動かしたまま、別のターミナルで実行します。
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+ブラウザでViteが表示したURL（通常は[http://localhost:5173](http://localhost:5173)）を開きます。開発時の`/api`リクエストはViteにより`http://localhost:8000`へ転送されます。
+
+### 4. 終了する
+
+FastAPIとViteは、それぞれのターミナルで`Ctrl+C`を押して終了します。QdrantとRedisを停止する場合は、リポジトリのルートで次を実行します。
+
+```bash
+docker-compose -f docker-compose/docker-compose.yml down
+```
+
+> 📝 **注意**: `down -v`はQdrantとRedisの永続ボリュームを削除するため、通常の終了では使用しないでください。
+
+> **対象**: `frontend/`<br>
+> **バージョン**: 1.1<br>
 > **最終更新日**: 2026-07-17
 
 ## 目次
@@ -218,6 +291,7 @@ npm run build
 | バージョン | 変更内容 |
 |---|---|
 | 1.0 | 初版作成。構成、実行フロー、HITL、設定、モジュール文書索引を追加 |
+| 1.1 | 文書先頭に、前提条件、Qdrant/Redis、FastAPI、Reactの起動確認・終了手順を追加 |
 
 ## 付録: 依存関係図
 

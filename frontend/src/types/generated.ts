@@ -266,6 +266,8 @@ export interface components {
              * @enum {string}
              */
             decision: "answer" | "escalate";
+            /** Escalation Reason */
+            escalation_reason?: ("insufficient_grounding" | "contradiction" | "no_information" | "forced_policy" | "identity_required" | "system_error") | null;
             /**
              * Forced Escalate
              * @default false
@@ -298,6 +300,16 @@ export interface components {
              * @default 0
              */
             overall_confidence: number;
+            /**
+             * Replan Count
+             * @default 0
+             */
+            replan_count: number;
+            /**
+             * Retrieved Source Count
+             * @default 0
+             */
+            retrieved_source_count: number;
             /** Source Agreement */
             source_agreement?: number | null;
             /**
@@ -305,6 +317,11 @@ export interface components {
              * @default false
              */
             used_web: boolean;
+            /**
+             * Verified Source Count
+             * @default 0
+             */
+            verified_source_count: number;
             /** Vertical */
             vertical?: string | null;
             /**

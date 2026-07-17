@@ -40,15 +40,43 @@ def test_service_publishes_events_and_completes_without_action():
     ]
 
 
-def test_escalation_waits_for_confirmation_when_action_enabled():
+def test_escalation_is_terminal_without_action_confirmation():
     def escalated(query, **kwargs):
         return LegacySupportResult(answer=None, decision="escalate", vertical="saas")
 
     service = AgentSupportService(runner=escalated)
     record = service.run_sync(RunRequest(query="障害", vertical="saas", do_action=True))
 
+    assert record.state == ExecutionState.ESCALATED
+    assert record.pending_confirmation is None
+    assert record.result.escalation_reason == "insufficient_grounding"
+
+
+def test_explicit_request_can_propose_side_effecting_action():
+    def request_result(query, **kwargs):
+        return LegacySupportResult(
+            answer="返品手続きを案内します",
+            decision="answer",
+            intent="request",
+            vertical="ec",
+        )
+
+    service = AgentSupportService(runner=request_result)
+    record = service.run_sync(RunRequest(query="返品したい", vertical="ec", do_action=True))
+
     assert record.state == ExecutionState.PENDING_CONFIRMATION
-    assert record.pending_confirmation.action.action_type == "escalate_to_human"
+    assert record.pending_confirmation.action.action_type == "create_ticket"
+
+
+def test_unknown_intent_never_proposes_action():
+    def unknown_intent(query, **kwargs):
+        return LegacySupportResult(answer="案内", decision="answer", intent=None, vertical="ec")
+
+    service = AgentSupportService(runner=unknown_intent)
+    record = service.run_sync(RunRequest(query="返品したい", vertical="ec", do_action=True))
+
+    assert record.state == ExecutionState.COMPLETED
+    assert record.pending_confirmation is None
 
 
 def test_vertical_configs_are_isolated_across_parallel_runs():
@@ -85,7 +113,7 @@ def test_eval_vertical_runner_keeps_run_support_agent_contract():
 
 
 def test_service_workflow_is_silent_by_default(monkeypatch, capsys):
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     result = execute_support_workflow("質問")
 

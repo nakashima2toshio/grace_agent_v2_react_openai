@@ -46,6 +46,7 @@ question / request / incident）する。FAQ 質問（question。例:「課金�
 from __future__ import annotations
 
 import argparse
+import ast
 import contextlib
 import io
 import os
@@ -478,6 +479,35 @@ def _collect_citations(step_results) -> List[str]:
     return seen
 
 
+def _collect_evidence_texts(step_results) -> List[str]:
+    """検索ステップの構造化出力からGroundedness検証用の本文を抽出する。
+
+    `StepResult.sources`はURLまたはファイル名だけなので、主張の検証本文には使わない。
+    Executorが文字列化したRAG/Web検索結果だけを安全に復元し、payload内の
+    answer/content/textを収集する。reasoning等の自由文は自己検証になるため除外する。
+    """
+    evidence: List[str] = []
+    for step_result in step_results:
+        output = getattr(step_result, "output", None)
+        if not isinstance(output, str) or not output.strip().startswith(("[", "{")):
+            continue
+        try:
+            parsed = ast.literal_eval(output)
+        except (SyntaxError, ValueError):
+            continue
+        entries = parsed if isinstance(parsed, list) else [parsed]
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            payload = entry.get("payload", entry)
+            if not isinstance(payload, dict):
+                continue
+            text = payload.get("answer") or payload.get("content") or payload.get("text")
+            if isinstance(text, str) and text.strip() and text not in evidence:
+                evidence.append(text)
+    return evidence
+
+
 def _citation_text(citation: str) -> str:
     """出典表示文字列（"[社内] xxx" / "[Web] xxx"）からラベルを外して中身を返す。"""
     return citation.split("] ", 1)[1] if "] " in citation else citation
@@ -671,6 +701,19 @@ def execute_support_workflow(
         status = statuses.get(step_id) if step_id is not None else None
         step_results = getattr(event, "step_results", {})
         step_result = step_results.get(step_id) if step_id is not None else None
+        current_plan = getattr(event, "plan", None)
+        if current_plan is not None:
+            serialized_plan = current_plan.model_dump(mode="json")
+            if serialized_plan != forward_executor_event.current_plan:
+                emit(
+                    "replan_completed",
+                    previous_plan=forward_executor_event.current_plan,
+                    plan=serialized_plan,
+                    reason="executor_replan",
+                    revision=forward_executor_event.revision + 1,
+                )
+                forward_executor_event.current_plan = serialized_plan
+                forward_executor_event.revision += 1
         emit(
             "executor_state",
             step_id=step_id,
@@ -679,6 +722,9 @@ def execute_support_workflow(
             cancelled=bool(getattr(event, "is_cancelled", False)),
             step=(step_result.model_dump(mode="json") if step_result is not None else None),
         )
+
+    forward_executor_event.current_plan = plan.model_dump(mode="json")
+    forward_executor_event.revision = 1
 
     result = (
         executor.execute_plan_with_events(plan, forward_executor_event)
@@ -689,8 +735,17 @@ def execute_support_workflow(
     internal_citations = _collect_citations(result.step_results)
     # executor が動的挿入した web_search（RAG スコア不足時）の使用を検知
     used_dynamic_web = any(c.startswith("[Web]") for c in internal_citations)
+    planned_step_ids = {step.step_id for step in plan.steps}
     for sr in result.step_results:
-        emit("step_completed", step=sr.model_dump(mode="json"))
+        if sr.step_id in planned_step_ids:
+            origin = "planned"
+        elif sr.step_id >= 200:
+            origin = "dynamic_ask_user"
+        elif sr.step_id >= 100:
+            origin = "dynamic_web"
+        else:
+            origin = "replan"
+        emit("step_completed", step=sr.model_dump(mode="json"), origin=origin)
         print(f"  step{sr.step_id}: {sr.status} (sources={len(sr.sources)})")
     if used_dynamic_web:
         print("  [web] executor が動的 Web 検索を使用（RAG スコア不足のため）")
@@ -698,7 +753,8 @@ def execute_support_workflow(
     # ③ 根拠評価（内部）
     emit("groundedness_started")
     _banner("③ Confidence（GroundednessVerifier: 内部回答の裏付け）")
-    gres = verifier.verify(query, internal_answer, [_citation_text(c) for c in internal_citations])
+    evidence_texts = _collect_evidence_texts(result.step_results)
+    gres = verifier.verify(query, internal_answer, evidence_texts)
     if verbose:
         print(f"  [groundedness] supported={gres.supported} / total={gres.total} / "
               f"contradiction={gres.has_contradiction} / verified={gres.verified}")
@@ -748,6 +804,9 @@ def execute_support_workflow(
         used_web=used_dynamic_web,
         vertical=vertical,
         overall_confidence=result.overall_confidence,
+        retrieved_source_count=len(internal_citations),
+        verified_source_count=len(evidence_texts),
+        replan_count=result.replan_count,
     )
     emit("gate_completed", decision=decision, warning=warning,
          forced_escalate=forced_escalate, matched_keyword=matched_kw)
@@ -810,6 +869,9 @@ def execute_support_workflow(
                 contradiction=contradiction,
                 vertical=vertical,
                 overall_confidence=result.overall_confidence,
+                retrieved_source_count=len(_merge_citations(internal_citations, web_citations)),
+                verified_source_count=len(_web_source_texts(web_output)),
+                replan_count=result.replan_count,
             )
         else:
             print("  [web] 有効な検索結果が得られませんでした")

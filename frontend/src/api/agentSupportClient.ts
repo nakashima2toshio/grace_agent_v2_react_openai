@@ -53,7 +53,7 @@ export const agentSupportClient = {
   events: (id: string, onEvent: (event: RunEvent) => void, onError: () => void) => {
     const source = new EventSource(`${API}/api/agent-support/runs/${id}/events`)
     const eventTypes = [
-      'plan_started', 'plan_completed', 'execution_started', 'executor_state',
+      'plan_started', 'plan_completed', 'replan_completed', 'execution_started', 'executor_state',
       'tool_event', 'step_completed', 'groundedness_completed', 'gate_completed',
       'web_started', 'web_completed', 'no_info_completed', 'confirmation_required',
       'confirmation_resolved', 'action_started', 'action_completed', 'run_completed',

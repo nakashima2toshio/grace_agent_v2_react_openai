@@ -353,6 +353,25 @@
             "title": "Decision",
             "type": "string"
           },
+          "escalation_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "insufficient_grounding",
+                  "contradiction",
+                  "no_information",
+                  "forced_policy",
+                  "identity_required",
+                  "system_error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Escalation Reason"
+          },
           "forced_escalate": {
             "default": false,
             "title": "Forced Escalate",
@@ -399,6 +418,16 @@
             "title": "Overall Confidence",
             "type": "number"
           },
+          "replan_count": {
+            "default": 0,
+            "title": "Replan Count",
+            "type": "integer"
+          },
+          "retrieved_source_count": {
+            "default": 0,
+            "title": "Retrieved Source Count",
+            "type": "integer"
+          },
           "source_agreement": {
             "anyOf": [
               {
@@ -414,6 +443,11 @@
             "default": false,
             "title": "Used Web",
             "type": "boolean"
+          },
+          "verified_source_count": {
+            "default": 0,
+            "title": "Verified Source Count",
+            "type": "integer"
           },
           "vertical": {
             "anyOf": [

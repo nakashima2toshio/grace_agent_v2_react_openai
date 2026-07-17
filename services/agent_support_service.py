@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from threading import Thread
 from typing import Callable
 
@@ -36,6 +37,7 @@ EVENT_STATES = {
     "no_info_started": ExecutionState.NO_INFO_CHECK,
     "no_info_completed": ExecutionState.NO_INFO_CHECK,
 }
+logger = logging.getLogger(__name__)
 
 
 class RunCancelled(RuntimeError):
@@ -99,10 +101,23 @@ class AgentSupportService:
             if raw is None:
                 raise RuntimeError("OPENAI_API_KEY is not set")
             result = SupportResult.model_validate(raw)
+            if result.decision == "escalate" and result.escalation_reason is None:
+                result = result.model_copy(update={
+                    "escalation_reason": self._escalation_reason(result),
+                })
             action = self._proposed_action(request, result)
             if action is not None:
                 result = result.model_copy(update={"action": action})
             self.store.set_result(run_id, result)
+            logger.info(
+                "agent_support_completed run_id=%s decision=%s replan_count=%d "
+                "grounding_undecidable=%s action_proposed=%s",
+                run_id,
+                result.decision,
+                result.replan_count,
+                result.groundedness_decided == 0,
+                action is not None,
+            )
             if action is not None:
                 self.actions.propose(run_id, action)
                 return
@@ -123,10 +138,14 @@ class AgentSupportService:
 
     @staticmethod
     def _proposed_action(request: RunRequest, result: SupportResult) -> ActionRequest | None:
-        if not request.do_action or result.intent == "question":
+        # Escalation is a terminal support decision, not a side-effecting Action.
+        # HITL is reserved for explicit request/incident Actions such as ticket creation.
+        if (
+            not request.do_action
+            or result.decision == "escalate"
+            or result.intent not in {"request", "incident"}
+        ):
             return None
-        if result.decision == "escalate":
-            return ActionRequest(action_type="escalate_to_human", args={"query": request.query})
         profile = PROFILES.get(request.vertical) if request.vertical else None
         if profile is None:
             return None
@@ -134,6 +153,16 @@ class AgentSupportService:
             if keyword in request.query:
                 return ActionRequest(action_type=action_type, args={"query": request.query})
         return None
+
+    @staticmethod
+    def _escalation_reason(result: SupportResult) -> str:
+        if result.forced_escalate:
+            return "forced_policy"
+        if result.no_info_detected:
+            return "no_information"
+        if result.contradiction:
+            return "contradiction"
+        return "insufficient_grounding"
 
     def _event(self, run_id: str, event_type: str, state: ExecutionState, data: dict) -> None:
         self.store.append_event(RunEvent(run_id=run_id, type=event_type, state=state, data=data))
