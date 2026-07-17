@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from config import ModelConfig
 from helper.helper_llm import create_llm_client
 
 # モデルからインポート
@@ -87,7 +88,7 @@ def generate_qa_pairs(
     text: str,
     dataset_type: str,
     chunk_id: str,
-    model: str = "claude-sonnet-4-6",
+    model: str = ModelConfig.DEFAULT_MODEL,
     qa_per_chunk: int = 3,
     log_callback=None,
 ) -> List[QAPair]:
@@ -105,8 +106,7 @@ def generate_qa_pairs(
     Returns:
         Q/Aペアのリスト
     """
-    # LLM クライアント（Anthropic Claude）
-    client = create_llm_client(provider="anthropic")
+    client = create_llm_client(provider="openai")
 
     prompt = f"""あなたは教育用Q/Aペア生成の専門家です。
 

@@ -25,7 +25,14 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 # テスト質問の 5 カテゴリ（docs/vertical_test_data.md §4。keyword-trap は誤検知検査用）
-CATEGORIES = ("in-scope", "out-of-scope", "action", "escalate-keyword", "keyword-trap")
+CATEGORIES = (
+    "in-scope",
+    "out-of-scope",
+    "action",
+    "escalate-keyword",
+    "keyword-trap",
+    "no-info",
+)
 
 # 誤エスカレ率の分母（本来 answer できるべきカテゴリ）
 _ANSWERABLE = ("in-scope", "keyword-trap")

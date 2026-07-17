@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 # Gemini 3 アドバンテージ: 3072次元
 DEFAULT_GEMINI_EMBEDDING_DIMS = 3072
-DEFAULT_OPENAI_EMBEDDING_DIMS = 1536
+DEFAULT_OPENAI_EMBEDDING_DIMS = 3072
 
 # Embeddingモデルの価格表（1Kトークンあたりのドル単価）
 EMBEDDING_PRICING = {
@@ -92,7 +92,7 @@ class OpenAIEmbedding(EmbeddingClient):
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "text-embedding-3-small",
+        model: str = "text-embedding-3-large",
         dims: int = DEFAULT_OPENAI_EMBEDDING_DIMS
     ):
         """
@@ -278,7 +278,7 @@ class GeminiEmbedding(EmbeddingClient):
 
 
 def create_embedding_client(
-    provider: str = "gemini",
+    provider: str = "openai",
     **kwargs
 ) -> EmbeddingClient:
     """
@@ -303,8 +303,8 @@ def create_embedding_client(
     """
     # Noneチェックとデフォルト値の設定
     if provider is None:
-        logger.warning("Provider is None. Defaulting to 'gemini'.")
-        provider = "gemini"
+        logger.warning("Provider is None. Defaulting to 'openai'.")
+        provider = "openai"
 
     if provider.lower() == "openai":
         return OpenAIEmbedding(**kwargs)
@@ -321,7 +321,7 @@ def create_embedding_client(
 
 
 # デフォルトプロバイダー設定（config.ymlから読み込む予定）
-DEFAULT_EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "gemini")
+DEFAULT_EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai")
 
 
 def get_default_embedding_client(**kwargs) -> EmbeddingClient:
@@ -334,7 +334,7 @@ def get_embedding_model_pricing(model_name: str) -> float:
     """Embeddingモデルの価格を取得"""
     return EMBEDDING_PRICING.get(model_name, 0.0)
 
-def get_embedding_dimensions(provider: str = "gemini") -> int:
+def get_embedding_dimensions(provider: str = "openai") -> int:
     """
     指定プロバイダーのデフォルトEmbedding次元数を取得
 
@@ -347,7 +347,7 @@ def get_embedding_dimensions(provider: str = "gemini") -> int:
         次元数
     """
     if provider is None:
-        provider = "gemini"
+        provider = "openai"
 
     if provider.lower() == "gemini":
         return DEFAULT_GEMINI_EMBEDDING_DIMS  # 3072

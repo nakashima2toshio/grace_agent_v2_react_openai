@@ -64,7 +64,7 @@ def submit_unified_qa_generation(
         chunks: List[Dict],
         config: Dict,
         model: str,
-        provider: str = "anthropic",  # 互換性のために残すが使用しない
+        provider: str = "openai",  # 互換性のために残すが使用しない
 ) -> List:
     """
     チャンクのQ/A生成タスクを並列実行
@@ -72,7 +72,7 @@ def submit_unified_qa_generation(
     Args:
         chunks: チャンクのリスト
         config: データセット設定
-        model: 使用するモデル（例: "gemini-2.5-flash"）
+        model: 使用するOpenAIモデル（例: "gpt-5-mini"）
         provider: 互換性のために残すが使用しない
 
     Returns:

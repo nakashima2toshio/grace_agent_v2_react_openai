@@ -481,6 +481,28 @@ class Executor:
         finally:
             self._noninteractive = False
 
+    def execute_plan_with_events(
+            self,
+            plan: ExecutionPlan,
+            on_event: Callable[[Any], None],
+    ) -> ExecutionResult:
+        """Execute through the generator and forward immutable snapshots/events.
+
+        This is the service/API counterpart of ``execute_plan``. It preserves
+        the blocking CLI's non-interactive intervention behavior while exposing
+        every yielded state or tool event to a caller-owned event sink.
+        """
+        self._noninteractive = True
+        gen = self._dispatch_generator(plan)
+        try:
+            while True:
+                event = next(gen)
+                on_event(event)
+        except StopIteration as exc:
+            return exc.value
+        finally:
+            self._noninteractive = False
+
     def _dispatch_generator(
             self, plan: ExecutionPlan
     ) -> Generator[Any, None, ExecutionResult]:

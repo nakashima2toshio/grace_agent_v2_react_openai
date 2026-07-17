@@ -19,6 +19,7 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
+from config import ModelConfig
 from helper.helper_llm import create_llm_client
 
 logging.basicConfig(level=logging.INFO)
@@ -54,23 +55,22 @@ class SmartQAGenerator:
     コンテンツを考慮したインテリジェントQ/A生成クラス（構造化出力1回方式）
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6", api_key: Optional[str] = None):
+    def __init__(self, model: str = ModelConfig.DEFAULT_MODEL, api_key: Optional[str] = None):
         """
         初期化
 
         Args:
-            model: 使用するClaudeモデル（デフォルト: claude-sonnet-4-6）
-            api_key: 未使用（統一クライアントが環境変数からキーを解決する）
+            model: 使用するOpenAIモデル
+            api_key: 未指定時はOPENAI_API_KEYから解決する
         """
         self.model = model
 
-        # 統一 LLM クライアント（Anthropic Claude）を使用する。
-        self.client = create_llm_client(provider="anthropic", default_model=model)
+        self.client = create_llm_client(provider="openai", default_model=model, api_key=api_key)
         # 直近の analyze_and_generate 呼び出しのトークン使用量。
         # process_chunk → Celery worker → collect_results(usage_out) へ伝播し、
         # トークン集計サマリーを実値化する（#67 の usage 配管）。
         self.last_usage: Dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
-        logger.info(f"統一LLMクライアント(Anthropic)を使用 (model={self.model})")
+        logger.info(f"OpenAI Responsesクライアントを使用 (model={self.model})")
 
     COMBINED_PROMPT = """
 以下のテキストチャンクを分析し、適切な数のQ/Aペアを生成してください。
@@ -225,9 +225,9 @@ def analyze_qa_statistics(results: List[Dict]) -> Dict:
 if __name__ == "__main__":
     import os
 
-    api_key = os.getenv("ANTHROPIC_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("エラー: ANTHROPIC_API_KEY が設定されていません")
+        print("エラー: OPENAI_API_KEY が設定されていません")
         exit(1)
 
     generator = SmartQAGenerator(api_key=api_key)

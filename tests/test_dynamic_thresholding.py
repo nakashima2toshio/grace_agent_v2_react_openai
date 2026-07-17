@@ -15,7 +15,11 @@ class TestRAGSearchToolDynamicThresholding(unittest.TestCase):
         self.mock_config = MagicMock()
         self.mock_config.qdrant.url = "http://mock-qdrant:6333"
         self.mock_config.qdrant.search_priority = ["test_collection"]
+        self.mock_config.qdrant.restrict_to_collection = True
+        self.mock_config.qdrant.collection_name = "test_collection"
+        self.mock_config.qdrant.allowed_collections = ["test_collection"]
         self.tool = RAGSearchTool(config=self.mock_config)
+        self.tool._is_collection_searchable = MagicMock(return_value=True)
 
     @patch('agent_tools.search_rag_knowledge_base_structured')
     def test_dynamic_thresholding_high_score(self, mock_search):

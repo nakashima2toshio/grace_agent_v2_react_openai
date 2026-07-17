@@ -28,6 +28,30 @@
 > | 4 | [docs/vertical_saas.md](docs/vertical_saas.md) | **SaaS プロファイル** — 「技術 FAQ は自動・障害/課金は即・人へ」。エスカレ語 7 語（最多）・課金/SLA trap・不具合の起票・OSS docs 投入・KPI 7/8 |
 > | 5 | [docs/vertical_ec.md](docs/vertical_ec.md) | **EC プロファイル** — 「手続きは自動化・注文情報には本人確認」。唯一の `require_identity=True`（本人確認フロー）・返品/返金/解約 trap・KPI 9/9 |
 
+### React + FastAPI GUI
+
+GRACE-SupportをReact + TypeScriptから実行するGUIを `frontend/` に追加しています。Python側のGRACE資産を再利用し、FastAPIがrun状態、SSE進捗、キャンセル、HITL承認を提供します。Actionはブラウザから直接実行されず、バックエンドで本人確認と明示承認を通過した場合のみ一度実行されます。
+
+```bash
+# Qdrant + Redis
+docker-compose -f docker-compose/docker-compose.yml up -d
+
+# backend
+export AGENT_SUPPORT_STORE=redis
+# 既定: redis://localhost:6379/2（Celery用DB/キーと分離）
+uv run uvicorn api.app:app --reload --port 8000
+
+# frontend（別terminal）
+cd frontend
+npm ci
+npm run dev
+```
+
+API schema更新時は `uv run python scripts/export_agent_support_openapi.py`、続けて
+`cd frontend && npm run types:generate` を実行します。CIはOpenAPI snapshotと生成型の差分を検出します。
+
+詳細は [Reactアーキテクチャ](docs/agent_support_react_architecture.md) と [移行TODO](docs/migration_to_react.md) を参照してください。
+
 ---
 
 #### (1) 自律型Agent（Anthropic Claude API利用、スクラッチで作成）

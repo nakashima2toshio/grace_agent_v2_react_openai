@@ -1,0 +1,187 @@
+{
+  "captured_at": "2026-07-16T22:19:34.819537+00:00",
+  "mode": "mock-fallback",
+  "reason": "real API baseline unavailable",
+  "availability": {
+    "anthropic": false,
+    "gemini": false
+  },
+  "cases": [
+    {
+      "request": {
+        "query": "住民票の取得方法は？",
+        "vertical": "gov",
+        "use_web": true,
+        "do_action": false,
+        "dry_run": true,
+        "identity": null
+      },
+      "state": "completed",
+      "result": {
+        "answer": "住民票の取得方法を案内します。",
+        "citations": [
+          "[社内] gov_faq"
+        ],
+        "groundedness": 1.0,
+        "groundedness_decided": 1,
+        "decision": "answer",
+        "warning": false,
+        "used_web": false,
+        "source_agreement": null,
+        "contradiction": false,
+        "action": null,
+        "action_result": null,
+        "action_outcome": null,
+        "vertical": "gov",
+        "overall_confidence": 0.0,
+        "intent": "question",
+        "forced_escalate": false,
+        "identity_checked": false,
+        "no_info_detected": false,
+        "web_reused": false
+      },
+      "pending_confirmation": null,
+      "elapsed_ms": 0.325
+    },
+    {
+      "request": {
+        "query": "架空機能 Quantum Sync Pro の設定手順は？",
+        "vertical": "saas",
+        "use_web": true,
+        "do_action": false,
+        "dry_run": true,
+        "identity": null
+      },
+      "state": "escalated",
+      "result": {
+        "answer": null,
+        "citations": [],
+        "groundedness": 0.0,
+        "groundedness_decided": 0,
+        "decision": "escalate",
+        "warning": false,
+        "used_web": false,
+        "source_agreement": null,
+        "contradiction": false,
+        "action": null,
+        "action_result": null,
+        "action_outcome": null,
+        "vertical": "saas",
+        "overall_confidence": 0.0,
+        "intent": null,
+        "forced_escalate": false,
+        "identity_checked": false,
+        "no_info_detected": true,
+        "web_reused": false
+      },
+      "pending_confirmation": null,
+      "elapsed_ms": 0.253
+    },
+    {
+      "request": {
+        "query": "バグのチケットを作成してください",
+        "vertical": "saas",
+        "use_web": true,
+        "do_action": true,
+        "dry_run": true,
+        "identity": null
+      },
+      "state": "pending_confirmation",
+      "result": {
+        "answer": "チケット作成候補です。",
+        "citations": [],
+        "groundedness": 0.0,
+        "groundedness_decided": 0,
+        "decision": "answer",
+        "warning": false,
+        "used_web": false,
+        "source_agreement": null,
+        "contradiction": false,
+        "action": {
+          "action_type": "create_ticket",
+          "args": {
+            "query": "バグのチケットを作成してください"
+          },
+          "requires_confirmation": true,
+          "action_id": null
+        },
+        "action_result": null,
+        "action_outcome": null,
+        "vertical": "saas",
+        "overall_confidence": 0.0,
+        "intent": "request",
+        "forced_escalate": false,
+        "identity_checked": false,
+        "no_info_detected": false,
+        "web_reused": false
+      },
+      "pending_confirmation": {
+        "action": {
+          "action_type": "create_ticket",
+          "args": {
+            "query": "バグのチケットを作成してください"
+          },
+          "requires_confirmation": true,
+          "action_id": "bfaf60d2-dd9d-475e-ae6d-c7babb6c518a"
+        },
+        "action_hash": "aa9417d6a7d1112e6fc2977c4e60e85c1eb5cbad6cd5a0a5ce1e58029959b498",
+        "version": 1,
+        "expires_at": "2026-07-16T22:34:34.818829Z"
+      },
+      "elapsed_ms": 0.773
+    },
+    {
+      "request": {
+        "query": "不正アクセスの疑いがあります",
+        "vertical": "ec",
+        "use_web": true,
+        "do_action": true,
+        "dry_run": true,
+        "identity": null
+      },
+      "state": "pending_confirmation",
+      "result": {
+        "answer": null,
+        "citations": [],
+        "groundedness": 0.0,
+        "groundedness_decided": 0,
+        "decision": "escalate",
+        "warning": false,
+        "used_web": false,
+        "source_agreement": null,
+        "contradiction": false,
+        "action": {
+          "action_type": "escalate_to_human",
+          "args": {
+            "query": "不正アクセスの疑いがあります"
+          },
+          "requires_confirmation": true,
+          "action_id": null
+        },
+        "action_result": null,
+        "action_outcome": null,
+        "vertical": "ec",
+        "overall_confidence": 0.0,
+        "intent": "incident",
+        "forced_escalate": false,
+        "identity_checked": false,
+        "no_info_detected": false,
+        "web_reused": false
+      },
+      "pending_confirmation": {
+        "action": {
+          "action_type": "escalate_to_human",
+          "args": {
+            "query": "不正アクセスの疑いがあります"
+          },
+          "requires_confirmation": true,
+          "action_id": "9c0d90bd-ad35-45d3-bc51-4a1eee014b22"
+        },
+        "action_hash": "5f29dccc4ecef0f26fcb5aedc455d7b997227f6ec2aab7d40a1d6f9be4d33eac",
+        "version": 1,
+        "expires_at": "2026-07-16T22:34:34.819420Z"
+      },
+      "elapsed_ms": 0.283
+    }
+  ]
+}

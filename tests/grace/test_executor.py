@@ -201,6 +201,19 @@ class TestExecutor:
         assert len(step_starts) == 2
         assert len(step_completes) == 2
 
+    def test_execute_plan_with_events_forwards_generator_states(
+        self, mock_tool_registry, sample_plan
+    ):
+        executor = Executor(tool_registry=mock_tool_registry)
+        events = []
+
+        result = executor.execute_plan_with_events(sample_plan, events.append)
+
+        assert result.overall_status == "success"
+        assert events
+        assert any(getattr(event, "current_step_id", None) == 2 for event in events)
+        assert executor._noninteractive is False
+
     def test_execute_plan_dependency_check(self, mock_tool_registry):
         """依存関係のチェック"""
         plan = ExecutionPlan(

@@ -22,40 +22,30 @@ from typing import Any, Dict, List, Optional
 # ===================================================================
 
 class ModelConfig:
-    """LLM モデル設定（本プロジェクトの既定は Anthropic Claude）"""
+    """OpenAI LLMモデル設定。"""
 
     # 利用可能なモデル一覧（テキスト生成）
     AVAILABLE_MODELS: List[str] = [
-        "claude-sonnet-4-6",            # デフォルト（推論・生成）
-        "claude-haiku-4-5-20251001",    # 高速・文字列処理向け
+        "gpt-5-mini",
+        "gpt-5-nano",
     ]
 
     # デフォルトモデル
-    DEFAULT_MODEL: str = "claude-sonnet-4-6"
+    DEFAULT_MODEL: str = "gpt-5-mini"
+    LIGHT_MODEL: str = "gpt-5-nano"
 
-    # temperatureパラメータをサポートしないモデル（Claude は全モデルサポート）
-    NO_TEMPERATURE_MODELS: List[str] = []
+    NO_TEMPERATURE_MODELS: List[str] = ["gpt-5-mini", "gpt-5-nano"]
 
-    # モデル料金（$/1K tokens）。Gemini エントリは後方互換のため残置。
+    # 料金は利用箇所で未確定値を推測しない。実績usage/cost側で集計する。
     MODEL_PRICING: Dict[str, Dict[str, float]] = {
-        "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
-        "claude-haiku-4-5-20251001": {"input": 0.001, "output": 0.005},
-        "gemini-3-pro-preview": {"input": 0.00125, "output": 0.010},
-        "gemini-2.5-flash-preview": {"input": 0.00015, "output": 0.0035},
-        "gemini-2.0-flash": {"input": 0.0001, "output": 0.0004},
-        "gemini-1.5-pro": {"input": 0.00125, "output": 0.005},
-        "gemini-1.5-flash": {"input": 0.000075, "output": 0.0003},
+        "gpt-5-mini": {"input": 0.0, "output": 0.0},
+        "gpt-5-nano": {"input": 0.0, "output": 0.0},
     }
 
     # モデル制限
     MODEL_LIMITS: Dict[str, Dict[str, int]] = {
-        "claude-sonnet-4-6": {"max_tokens": 200000, "max_output": 8192},
-        "claude-haiku-4-5-20251001": {"max_tokens": 200000, "max_output": 8192},
-        "gemini-3-pro-preview": {"max_tokens": 1000000, "max_output": 64000},
-        "gemini-2.5-flash-preview": {"max_tokens": 1000000, "max_output": 64000},
-        "gemini-2.0-flash": {"max_tokens": 1000000, "max_output": 8192},
-        "gemini-1.5-pro": {"max_tokens": 1000000, "max_output": 8192},
-        "gemini-1.5-flash": {"max_tokens": 1000000, "max_output": 8192},
+        "gpt-5-mini": {"max_tokens": 400000, "max_output": 128000},
+        "gpt-5-nano": {"max_tokens": 400000, "max_output": 128000},
     }
 
     @classmethod
@@ -76,8 +66,7 @@ class ModelConfig:
     @classmethod
     def uses_max_completion_tokens(cls, model: str) -> bool:
         """max_completion_tokensを使用するモデルかどうか"""
-        # Anthropic Claude は max_tokens（出力上限）を使用するため常に False
-        return False
+        return model in cls.AVAILABLE_MODELS
 
 
 # ===================================================================
@@ -345,8 +334,8 @@ class QdrantConfig:
     DOCKER_IMAGE: str = "qdrant/qdrant"
     HEALTH_CHECK_ENDPOINT: str = "/collections"
     DEFAULT_TIMEOUT: int = 30
-    DEFAULT_VECTOR_SIZE: int = 3072  # gemini-embedding-001 (MRL: 768/1536/3072)
-    DEFAULT_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    DEFAULT_VECTOR_SIZE: int = 3072  # text-embedding-3-large
+    DEFAULT_EMBEDDING_MODEL: str = "text-embedding-3-large"
 
 
 # ===================================================================
@@ -404,69 +393,52 @@ class CohereConfig:
 
 
 # ===================================================================
-# Gemini API設定
+# OpenAI API設定
 # ===================================================================
 
-class GeminiConfig:
-    """Gemini API設定（既定 Embedding = gemini-embedding-001 用。LLM の既定は Anthropic Claude=ModelConfig。下記 LLM モデルは後方互換）"""
+class OpenAIConfig:
+    """OpenAI API設定。"""
 
     # 利用可能なモデル一覧
     AVAILABLE_MODELS: List[str] = [
-        "gemini-2.5-flash",            # デフォルト
-        "gemini-2.5-pro-preview",
-        "gemini-2.5-flash-preview",
-        "gemini-2.0-flash",
+        ModelConfig.DEFAULT_MODEL,
+        ModelConfig.LIGHT_MODEL,
     ]
 
     # デフォルトモデル
-    DEFAULT_MODEL: str = "gemini-2.5-flash"
+    DEFAULT_MODEL: str = ModelConfig.DEFAULT_MODEL
 
     # Embeddingモデル
-    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_MODEL: str = QdrantConfig.DEFAULT_EMBEDDING_MODEL
 
-    # Embedding次元数（3072: Gemini 3最大精度）
-    EMBEDDING_DIMS: int = 3072
+    EMBEDDING_DIMS: int = QdrantConfig.DEFAULT_VECTOR_SIZE
 
-    # 思考レベル
-    DEFAULT_THINKING_LEVEL: str = "low"  # "low" or "high"
-
-    # 温度設定（Gemini 3推奨: 1.0）
-    DEFAULT_TEMPERATURE: float = 1.0
-
-    # モデル料金（1000トークンあたりのドル）
-    MODEL_PRICING: Dict[str, Dict[str, float]] = {
-        "gemini-2.5-flash": {"input": 0.00015, "output": 0.0006},
-        "gemini-2.5-flash-preview": {"input": 0.00015, "output": 0.0006},
-        "gemini-2.5-pro-preview": {"input": 0.00125, "output": 0.005},
-        "gemini-2.0-flash": {"input": 0.0001, "output": 0.0004},
-        "gemini-embedding-001": {"input": 0.0, "output": 0.0},  # 無料枠あり
-    }
+    MODEL_PRICING: Dict[str, Dict[str, float]] = ModelConfig.MODEL_PRICING
 
     # モデル制限
-    MODEL_LIMITS: Dict[str, Dict[str, int]] = {
-        "gemini-2.5-flash": {"max_input_tokens": 1000000, "max_output_tokens": 64000},
-        "gemini-2.5-flash-preview": {"max_input_tokens": 1000000, "max_output_tokens": 64000},
-        "gemini-2.5-pro-preview": {"max_input_tokens": 1000000, "max_output_tokens": 64000},
-        "gemini-2.0-flash": {"max_input_tokens": 1000000, "max_output_tokens": 8192},
-    }
+    MODEL_LIMITS: Dict[str, Dict[str, int]] = ModelConfig.MODEL_LIMITS
 
     @classmethod
     def get_model_limits(cls, model: str) -> Dict[str, int]:
         """モデルの制限を取得"""
         return cls.MODEL_LIMITS.get(
             model,
-            {"max_input_tokens": 128000, "max_output_tokens": 8192}
+            {"max_tokens": 128000, "max_output": 4096}
         )
 
     @classmethod
     def get_model_pricing(cls, model: str) -> Dict[str, float]:
         """モデルの料金を取得"""
-        return cls.MODEL_PRICING.get(model, {"input": 0.001, "output": 0.004})
+        return cls.MODEL_PRICING.get(model, {"input": 0.0, "output": 0.0})
 
     @classmethod
     def supports_thinking_level(cls, model: str) -> bool:
-        """モデルがthinking_levelをサポートするかチェック"""
-        return model.startswith("gemini-3")
+        """旧呼び出し互換。OpenAI経路ではthinking_levelを使用しない。"""
+        return False
+
+
+# 旧importを壊さないための名前だけの互換エイリアス。実設定値はOpenAI。
+GeminiConfig = OpenAIConfig
 
 
 # ===================================================================
@@ -487,7 +459,7 @@ class AgentConfig:
     RAG_SCORE_THRESHOLD: float = 0.50  # 検索結果として採用する最小スコア (0.7 -> 0.5に緩和)
 
     # エージェントモデル設定
-    # [MIGRATION gemini→anthropic] 既定 LLM を Anthropic Claude に統一
+    # OpenAI既定モデルを使用
     MODEL_NAME: str = ModelConfig.DEFAULT_MODEL
 
     # ロギング設定
@@ -503,18 +475,16 @@ class LLMProviderConfig:
     """LLMプロバイダー設定"""
 
     # デフォルトプロバイダー
-    # [MIGRATION gemini→anthropic] LLM は Anthropic、Embedding は Gemini 維持
-    DEFAULT_LLM_PROVIDER: str = "anthropic"  # "anthropic" / "openai" / "gemini"
-    DEFAULT_EMBEDDING_PROVIDER: str = "gemini"  # Embedding は Gemini（gemini-embedding-001）
+    DEFAULT_LLM_PROVIDER: str = "openai"
+    DEFAULT_EMBEDDING_PROVIDER: str = "openai"
 
     @classmethod
     def get_embedding_dims(cls, provider: Optional[str] = None) -> int:
         """プロバイダーに応じたEmbedding次元数を取得"""
         provider = provider or cls.DEFAULT_EMBEDDING_PROVIDER
-        if provider.lower() == "gemini":
-            return GeminiConfig.EMBEDDING_DIMS
-        else:
-            return QdrantConfig.DEFAULT_VECTOR_SIZE
+        if provider.lower() != "openai":
+            raise ValueError(f"Embedding providerはopenaiのみ対応します: {provider}")
+        return QdrantConfig.DEFAULT_VECTOR_SIZE
 
 
 # ===================================================================

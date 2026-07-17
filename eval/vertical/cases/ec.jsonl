@@ -2,6 +2,7 @@
 {"vertical": "ec", "category": "in-scope", "query": "返品規定を教えて", "expected_decision": "answer", "expected_action": null, "note": "『返品』は action_map にあるが FAQ質問なので起票しない"}
 {"vertical": "ec", "category": "in-scope", "query": "送料はいくらかかりますか？", "expected_decision": "answer", "expected_action": null}
 {"vertical": "ec", "category": "out-of-scope", "query": "この商品の入荷予定日はいつですか？", "expected_decision": "escalate", "expected_action": "escalate_to_human"}
+{"vertical": "ec", "category": "no-info", "query": "取扱いのない架空商品 GX-999 月面配送便の返品期限は？", "expected_decision": "escalate", "expected_action": "escalate_to_human", "note": "商品・規約ナレッジにない対象への情報なし回答を④'で検知する固定ケース"}
 {"vertical": "ec", "category": "action", "query": "返品したい", "expected_decision": "answer", "expected_action": "create_ticket", "expect_identity_check": true}
 {"vertical": "ec", "category": "action", "query": "注文をキャンセルしたい", "expected_decision": "answer", "expected_action": "create_ticket", "expect_identity_check": true}
 {"vertical": "ec", "category": "escalate-keyword", "query": "決済が失敗しました", "expected_decision": "escalate", "expected_action": "escalate_to_human", "note": "『決済』＋incident → 強制エスカレ"}

@@ -164,6 +164,13 @@ class RAGSearchTool(BaseTool):
         )
         search_candidates = self._apply_allowed_collections(search_candidates, allowed)
 
+        # 明示指定・動的候補のどちらも、検索前に読み取り専用で実体を検証する。
+        # 未作成・空・次元不一致を別collectionへのフォールバックで隠さない。
+        search_candidates = [
+            name for name in search_candidates
+            if self._is_collection_searchable(name)
+        ]
+
         logger.info(f"RAGSearchTool: Search candidates: {search_candidates}")
 
         final_results = []
@@ -288,6 +295,50 @@ class RAGSearchTool(BaseTool):
             logger.warning(f"RAGSearchTool: get_collection('{name}') failed: {e}")
             return None
 
+    def _is_collection_searchable(self, name: str) -> bool:
+        """collectionを変更せず、存在・件数・ベクトル次元だけを検証する。"""
+        try:
+            info = self.client.get_collection(name)
+        except Exception as e:
+            logger.warning(
+                "RAGSearchTool: collection '%s' は利用できません。"
+                "手動で作成・登録してください: %s",
+                name,
+                e,
+            )
+            return False
+
+        expected_dim = getattr(self.config.embedding, "dimensions", None)
+        actual_dim = self._collection_dense_dim(name)
+        if expected_dim is not None and actual_dim != expected_dim:
+            logger.warning(
+                "RAGSearchTool: collection '%s' の次元が不一致です"
+                " (expected=%s, actual=%s)。手動で再作成してください。",
+                name,
+                expected_dim,
+                actual_dim,
+            )
+            return False
+
+        points_count = getattr(info, "points_count", None)
+        if not isinstance(points_count, int):
+            try:
+                points_count = self.client.count(name, exact=False).count
+            except Exception as e:
+                logger.warning(
+                    "RAGSearchTool: collection '%s' の件数を確認できません: %s",
+                    name,
+                    e,
+                )
+                return False
+        if points_count <= 0:
+            logger.warning(
+                "RAGSearchTool: collection '%s' は空です。手動で登録してください。",
+                name,
+            )
+            return False
+        return True
+
     def _get_all_collections_dynamic(self) -> List[str]:
         """Qdrantから検索可能なコレクションを取得し、優先順位付けして返す。
 
@@ -364,9 +415,8 @@ class RAGSearchTool(BaseTool):
         （実環境のコレクション名はサフィックス付きが多いため、完全一致だと
         スコープ制限が意図せず素通りする）。
 
-        allowed が空なら制限なし。一致する候補が 1 つも無い場合は、コレクション
-        未登録の段階でもデモ・評価が動くよう**制限を適用せず**候補をそのまま返す
-        （警告ログを出す。厳格に閉じたい場合は restrict_to_collection を併用）。
+        allowed が空なら制限なし。一致する候補が無い場合は、業界外collectionへ
+        フォールバックせず空リストを返して安全に検索を停止する。
         """
         if not allowed:
             return candidates
@@ -375,10 +425,10 @@ class RAGSearchTool(BaseTool):
             logger.info(f"RAGSearchTool: allowed_collections で検索範囲を限定: {scoped}")
             return scoped
         logger.warning(
-            "RAGSearchTool: allowed_collections に一致する有効コレクションが無いため"
-            f"制限を適用しません（allowed={allowed} / candidates={candidates}）"
+            "RAGSearchTool: allowed_collections に一致する有効コレクションがありません。"
+            f"検索を停止します（allowed={allowed} / candidates={candidates}）"
         )
-        return candidates
+        return []
 
     def _calculate_confidence_factors(self, scores: List[float]) -> Dict[str, Any]:
         """Confidence計算用の統計情報を算出"""

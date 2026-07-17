@@ -54,12 +54,12 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 class LLMConfig(BaseModel):
-    """LLM設定（本プロジェクトは Anthropic を使用）"""
-    provider: str = "anthropic"
-    model: str = "claude-sonnet-4-6"
+    """OpenAI LLM設定。"""
+    provider: str = "openai"
+    model: str = "gpt-5-mini"
     # ステップ毎の確信度評価（evaluate_with_factors）などテレメトリ級の
     # 定型評価タスクに使う軽量モデル。回答生成・根拠検証は model を使う。
-    light_model: str = "claude-haiku-4-5-20251001"
+    light_model: str = "gpt-5-nano"
     temperature: float = 0.7
     max_tokens: int = 4096
     timeout: int = 30
@@ -70,9 +70,9 @@ class LLMConfig(BaseModel):
 
 
 class EmbeddingConfig(BaseModel):
-    """Embedding設定"""
-    provider: str = "gemini"
-    model: str = "gemini-embedding-001"
+    """OpenAI Embedding設定。"""
+    provider: str = "openai"
+    model: str = "text-embedding-3-large"
     dimensions: int = 3072
 
 
@@ -156,15 +156,15 @@ class LoggingConfig(BaseModel):
 class QdrantConfig(BaseModel):
     """Qdrant設定"""
     url: str = "http://localhost:6333"
-    collection_name: str = "customer_support_faq"
+    collection_name: str = "cc_news_2per_openai"
     search_limit: int = 5
     score_threshold: float = 0.35
     rag_sufficient_score: float = 0.7  # RAG結果が十分と判断するスコア閾値（これ未満ならweb_searchを動的実行）
     # True の場合、RAG検索を collection_name（または明示指定コレクション）の
     # 1コレクションのみに限定し、全コレクション横断のフォールバックを行わない。
     # ベンチマーク等でアクセス回数を最小化したい場合に使用する。
-    restrict_to_collection: bool = False
-    search_priority: list = Field(default_factory=lambda: ["wikipedia_ja", "livedoor", "cc_news", "japanese_text"])
+    restrict_to_collection: bool = True
+    search_priority: list = Field(default_factory=lambda: ["cc_news_2per_openai"])
     # 検索を許可するコレクションの許可リスト（空=制限なし）。業界プロファイル等で
     # 検索範囲（フォールバック連鎖を含む）をスコープするために使う。一致判定は
     # search_priority と同じ部分一致（例: "wikipedia_ja" は "wikipedia_ja_5per" に一致）。

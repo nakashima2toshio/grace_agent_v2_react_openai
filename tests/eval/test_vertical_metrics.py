@@ -148,7 +148,7 @@ class TestCaseFiles:
                 assert case["expected_decision"] in ("answer", "escalate")
                 assert "expected_action" in case
                 categories.add(case["category"])
-            # 5 カテゴリ（keyword-trap 含む）を各業界でカバーしていること
+            # no-info と keyword-trap を含む全カテゴリを各業界でカバーしていること
             assert set(CATEGORIES) <= categories, (
                 f"{path.name}: カテゴリ不足 {set(CATEGORIES) - categories}"
             )

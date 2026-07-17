@@ -39,16 +39,13 @@ class TestDataFiles:
 
 
 class TestProfileConsistency:
-    def test_collections_match_profiles(self):
-        """登録先コレクション名がプロファイルの検索スコープに含まれること。"""
+    def test_profiles_use_manually_managed_openai_collection(self):
+        """実行プロファイルは登録fixtureではなく手動管理collectionを参照する。"""
         from agent_support_example import PROFILES
 
-        for vertical, pairs in VERTICAL_COLLECTIONS.items():
-            profile_collections = set(PROFILES[vertical].collections)
-            for collection, _ in pairs:
-                assert collection in profile_collections, (
-                    f"{vertical}: {collection} が PROFILES['{vertical}'].collections にありません"
-                )
+        assert PROFILES["gov"].collections == ["gov_faq_ollama"]
+        assert PROFILES["saas"].collections == ["saas_api_ollama", "saas_docs_ollama"]
+        assert PROFILES["ec"].collections == ["ec_faq_ollama"]
 
     def test_collection_naming_convention(self):
         for pairs in VERTICAL_COLLECTIONS.values():

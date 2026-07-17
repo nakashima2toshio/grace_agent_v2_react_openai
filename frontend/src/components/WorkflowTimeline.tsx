@@ -1,0 +1,5 @@
+import{Check,Circle,LoaderCircle,ShieldCheck}from'lucide-react'
+import type{ExecutionState}from'../types/agentSupport'
+const steps:[ExecutionState,string][]=[['planning','Plan'],['executing','Execute'],['verifying','Groundedness'],['gating','Answer gate'],['web_verifying','Web verify'],['pending_confirmation','Action']]
+const order:ExecutionState[]=['queued',...steps.map(s=>s[0]),'action_executing','completed']
+export function WorkflowTimeline({state}:{state:ExecutionState}){const active=order.indexOf(state);return <ol className="timeline" aria-label="処理の進捗">{steps.map(([key,label],i)=>{const complete=active>order.indexOf(key)||state==='completed';const current=state===key||(key==='pending_confirmation'&&state==='action_executing');return <li key={key} className={complete?'complete':current?'current':''}><span>{complete?<Check/>:current?<LoaderCircle/>:<Circle/>}</span><small>0{i+1}</small>{label}</li>})}<li className={state==='completed'?'complete':''}><span><ShieldCheck/></span><small>07</small>Result</li></ol>}

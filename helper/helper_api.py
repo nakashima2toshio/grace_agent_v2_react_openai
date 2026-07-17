@@ -318,22 +318,21 @@ class ResponseProcessor:
 
 
 # ==================================================
-# 統合LLMクライアント（既定プロバイダー: Anthropic Claude）
+# 統合LLMクライアント（既定プロバイダー: OpenAI）
 # ==================================================
 
 # デフォルトプロバイダー（環境変数で設定可能）
-DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")  # "anthropic" / "gemini" / "openai"
+DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 
 
 class UnifiedLLMClient:
     """
     プロバイダー切り替え対応の統合LLMクライアント
 
-    Anthropic（既定）/ OpenAI / Gemini（後方互換）に対応する統一インターフェース。
-    本プロジェクトの既定 LLM プロバイダーは Anthropic（Claude）。
+    OpenAIを既定とする統一インターフェース。
 
     Usage:
-        # デフォルト（Anthropic Claude）
+        # デフォルト（OpenAI）
         client = UnifiedLLMClient()
         response = client.generate("Hello, world!")
 
@@ -348,7 +347,7 @@ class UnifiedLLMClient:
     def __init__(self, provider: str = None, **kwargs):
         """
         Args:
-            provider: "anthropic" / "openai" / "gemini"（Noneの場合はデフォルト＝anthropic）
+            provider: Noneの場合はデフォルトのOpenAI
             **kwargs: プロバイダー固有の初期化パラメータ
         """
         self.provider = provider or DEFAULT_LLM_PROVIDER

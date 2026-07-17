@@ -195,7 +195,7 @@ class UpgradedCLIAgent:
         self.session_id = str(uuid.uuid4())
 
         # [MIGRATION] AnthropicClient (via create_llm_client)。会話履歴は self._messages で自前管理。
-        self.llm = create_llm_client("anthropic", default_model=self.model_name)
+        self.llm = create_llm_client("openai", default_model=self.model_name)
         self._messages: List[Dict[str, Any]] = []
         self.system_instruction = self._build_system_instruction()
         self.tools = self._build_tools()

@@ -1,7 +1,7 @@
 """
 LLMクライアント抽象化レイヤー
 
-本プロジェクトの LLM 既定は Anthropic（Claude）。Anthropic / OpenAI / Gemini の
+本プロジェクトの LLM 既定は OpenAI。OpenAI / Anthropic / Gemini の
 3プロバイダーに対応する統一インターフェースを提供する。
   - テキスト生成: generate_content()
   - 構造化出力: generate_structured()
@@ -49,36 +49,21 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # --- LLM モデル設定 --- #
-# 本プロジェクトの LLM は Anthropic（Claude）。Gemini は後方互換のため残置。
+# 本プロジェクトの実行既定はOpenAI。旧プロバイダー実装は移行中の互換用途のみ。
 LLM_MODELS = [
-    "claude-sonnet-4-6",          # デフォルト（GRACE 本体・推論）
-    "claude-haiku-4-5-20251001",  # 文字列処理・eval ジャッジ向け
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-preview",
-    "gemini-2.0-flash",
-    "gemini-1.5-pro",
-    "gemini-1.5-flash",
+    "gpt-5-mini",
+    "gpt-5-nano",
 ]
 
 # 価格は 1K トークンあたりの USD（概算）
 LLM_PRICING = {
-    "claude-sonnet-4-6"          : {"input": 0.003, "output": 0.015},
-    "claude-haiku-4-5-20251001"  : {"input": 0.001, "output": 0.005},
-    "gemini-2.5-flash"        : {"input": 0.0001, "output": 0.0004},  # Estimated
-    "gemini-2.5-flash-preview": {"input": 0.00015, "output": 0.0035},
-    "gemini-2.0-flash"        : {"input": 0.0001, "output": 0.0004},
-    "gemini-1.5-pro"          : {"input": 0.00125, "output": 0.005},
-    "gemini-1.5-flash"        : {"input": 0.000075, "output": 0.0003},
+    "gpt-5-mini": {"input": 0.0, "output": 0.0},
+    "gpt-5-nano": {"input": 0.0, "output": 0.0},
 }
 
 LLM_LIMITS = {
-    "claude-sonnet-4-6"          : {"max_tokens": 200000, "max_output": 8192},
-    "claude-haiku-4-5-20251001"  : {"max_tokens": 200000, "max_output": 8192},
-    "gemini-2.5-flash"        : {"max_tokens": 1000000, "max_output": 8192},
-    "gemini-2.5-flash-preview": {"max_tokens": 1000000, "max_output": 64000},
-    "gemini-2.0-flash"        : {"max_tokens": 1000000, "max_output": 8192},
-    "gemini-1.5-pro"          : {"max_tokens": 1000000, "max_output": 8192},
-    "gemini-1.5-flash"        : {"max_tokens": 1000000, "max_output": 8192},
+    "gpt-5-mini": {"max_tokens": 400000, "max_output": 128000},
+    "gpt-5-nano": {"max_tokens": 400000, "max_output": 128000},
 }
 
 # --- Embedding モデル設定 --- #
@@ -100,7 +85,7 @@ EMBEDDING_DIMS = {
     "text-embedding-3-large": 3072,
 }
 
-DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "anthropic")
+DEFAULT_LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 
 
 class ToolUseResponse(NamedTuple):
@@ -134,7 +119,7 @@ class LLMClient(ABC):
 
 
 class OpenAIClient(LLMClient):
-    def __init__(self, api_key: Optional[str] = None, default_model: str = "gpt-4o-mini"):
+    def __init__(self, api_key: Optional[str] = None, default_model: str = "gpt-5-mini"):
         if not OpenAI:
             raise ImportError("openai package is not installed.")
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
@@ -142,24 +127,45 @@ class OpenAIClient(LLMClient):
             raise ValueError("OPENAI_API_KEY is not set")
         self.client = OpenAI(api_key=self.api_key)
         self.default_model = default_model
+        self.last_usage: Dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
+
+    def _record_usage(self, response: Any) -> None:
+        usage = getattr(response, "usage", None)
+        self.last_usage = {
+            "input_tokens": int(getattr(usage, "input_tokens", 0) or 0),
+            "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        }
+
+    @staticmethod
+    def _response_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(kwargs)
+        max_tokens = normalized.pop("max_tokens", None)
+        if max_tokens is not None and "max_output_tokens" not in normalized:
+            normalized["max_output_tokens"] = max_tokens
+        normalized.pop("temperature", None)
+        return normalized
 
     def generate_content(self, prompt: str, model: Optional[str] = None, **kwargs) -> str:
         model = model or self.default_model
-        messages = [{"role": "user", "content": prompt}]
-        response = self.client.chat.completions.create(model=model, messages=messages, **kwargs)
-        return response.choices[0].message.content
+        response = self.client.responses.create(
+            model=model,
+            input=prompt,
+            **self._response_kwargs(kwargs),
+        )
+        self._record_usage(response)
+        return response.output_text
 
     def generate_structured(self, prompt: str, response_schema: Type[BaseModel], model: Optional[str] = None,
                             **kwargs) -> BaseModel:
         model = model or self.default_model
-        messages = [{"role": "user", "content": prompt}]
-        response = self.client.beta.chat.completions.parse(
+        response = self.client.responses.parse(
             model=model,
-            messages=messages,
-            response_format=response_schema,
-            **kwargs
+            input=prompt,
+            text_format=response_schema,
+            **self._response_kwargs(kwargs),
         )
-        return response.choices[0].message.parsed
+        self._record_usage(response)
+        return response.output_parsed
 
     def count_tokens(self, text: str, model: Optional[str] = None) -> int:
         model = model or self.default_model
@@ -168,6 +174,110 @@ class OpenAIClient(LLMClient):
         except KeyError:
             encoding = tiktoken.get_encoding("cl100k_base")
         return len(encoding.encode(text))
+
+    @staticmethod
+    def _responses_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        return [
+            {
+                "type": "function",
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "parameters": tool.get("parameters") or tool.get("input_schema") or {
+                    "type": "object", "properties": {}
+                },
+            }
+            for tool in tools
+        ]
+
+    @staticmethod
+    def _responses_input(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        items: List[Dict[str, Any]] = []
+        for message in messages:
+            content = message.get("content", "")
+            if not isinstance(content, list):
+                items.append({"role": message.get("role", "user"), "content": content})
+                continue
+            text_parts: List[str] = []
+            for block in content:
+                block_type = block.get("type") if isinstance(block, dict) else None
+                if block_type == "tool_result":
+                    items.append({
+                        "type": "function_call_output",
+                        "call_id": block["tool_use_id"],
+                        "output": str(block.get("content", "")),
+                    })
+                elif block_type == "function_call":
+                    items.append(block)
+                elif block_type == "text":
+                    text_parts.append(str(block.get("text", "")))
+            if text_parts:
+                items.append({"role": message.get("role", "assistant"), "content": "\n".join(text_parts)})
+        return items
+
+    def generate_with_tools(
+        self,
+        messages: List[Dict[str, Any]],
+        tools: List[Dict[str, Any]],
+        system: str = "",
+        model: Optional[str] = None,
+        max_tokens: int = 4096,
+    ) -> ToolUseResponse:
+        kwargs: Dict[str, Any] = {
+            "model": model or self.default_model,
+            "input": self._responses_input(messages),
+            "max_output_tokens": max_tokens,
+        }
+        if system:
+            kwargs["instructions"] = system
+        if tools:
+            kwargs["tools"] = self._responses_tools(tools)
+        response = self.client.responses.create(**kwargs)
+        self._record_usage(response)
+
+        text_parts: List[str] = []
+        tool_calls: List[Dict[str, Any]] = []
+        assistant_content: List[Dict[str, Any]] = []
+        for item in getattr(response, "output", []) or []:
+            item_type = getattr(item, "type", "")
+            if item_type == "function_call":
+                arguments = getattr(item, "arguments", "{}") or "{}"
+                try:
+                    tool_input = json.loads(arguments)
+                except json.JSONDecodeError:
+                    tool_input = {}
+                call_id = getattr(item, "call_id", None) or getattr(item, "id", "")
+                name = getattr(item, "name", "")
+                tool_calls.append({"name": name, "input": tool_input, "id": call_id})
+                assistant_content.append({
+                    "type": "function_call", "call_id": call_id,
+                    "name": name, "arguments": arguments,
+                })
+            elif item_type == "message":
+                for block in getattr(item, "content", []) or []:
+                    text = getattr(block, "text", None)
+                    if text:
+                        text_parts.append(text)
+                        assistant_content.append({"type": "text", "text": text})
+        text = " ".join(text_parts) or getattr(response, "output_text", "") or ""
+        return ToolUseResponse(
+            text=text,
+            tool_calls=tool_calls,
+            stop_reason="tool_use" if tool_calls else "end_turn",
+            assistant_message={"role": "assistant", "content": assistant_content or text},
+        )
+
+    def build_tool_result_message(
+        self,
+        tool_calls: List[Dict[str, Any]],
+        results: List[str],
+    ) -> Dict[str, Any]:
+        return {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": call["id"], "content": result}
+                for call, result in zip(tool_calls, results)
+            ],
+        }
 
 
 class GeminiClient(LLMClient):

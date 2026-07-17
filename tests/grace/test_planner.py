@@ -220,7 +220,7 @@ class TestCreatePlanner:
 
         assert isinstance(planner, Planner)
         # デフォルトモデルは config/grace_config.yml の llm.model に追従する
-        assert planner.model_name == "claude-sonnet-4-6"
+        assert planner.model_name == "gpt-5-mini"
 
     @patch("grace.planner.create_chat_client")
     def test_create_planner_custom_model(self, mock_client_class):

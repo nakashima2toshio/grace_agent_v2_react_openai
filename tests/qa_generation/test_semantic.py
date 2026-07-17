@@ -54,7 +54,7 @@ class TestSemanticCoverage:
         sc = SemanticCoverage()
         assert sc.has_api_key is True
         assert sc.embedding_dims == 3072
-        assert sc.embedding_model == "gemini-embedding-001"
+        assert sc.embedding_model == "text-embedding-3-large"
 
     def test_split_into_paragraphs(self, mock_clients):
         sc = SemanticCoverage()

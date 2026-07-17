@@ -155,7 +155,7 @@ class TestHelpers:
 
     def test_get_embedding_dimensions(self):
         assert get_embedding_dimensions("gemini") == 3072
-        assert get_embedding_dimensions("openai") == 1536
+        assert get_embedding_dimensions("openai") == 3072
         
         with pytest.raises(ValueError):
             get_embedding_dimensions("invalid")

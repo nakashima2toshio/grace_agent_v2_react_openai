@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/api/agentsupportclient.ts","./src/components/workflowtimeline.tsx","./src/test/app.test.tsx","./src/test/e2e.test.tsx","./src/test/setup.ts","./src/types/agentsupport.ts","./src/types/generated.ts"],"version":"5.9.3"}

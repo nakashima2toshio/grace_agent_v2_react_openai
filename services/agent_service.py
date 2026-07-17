@@ -1,6 +1,6 @@
 # agent_service.py
 # [MIGRATION gemini→anthropic] google.genai (chats.create / send_message / function_call)
-#   ベースの ReActAgent を Anthropic (create_llm_client("anthropic")) + Tool Use
+#   ベースの ReActAgent を OpenAI Responses API + function calling
 #   (generate_with_tools / stop_reason=="tool_use") ベースへ全面移行。
 #   - LLM は Anthropic Claude（既定 claude-sonnet-4-6）。Embedding は Gemini 維持。
 #   - 会話履歴は self._messages で自前管理（Anthropic はステートレス設計）。
@@ -15,6 +15,7 @@ from qdrant_client import (
 
 from agent_tools import (
     RAGToolError,
+    get_searchable_collections_cached,
     list_rag_collections,
     search_rag_knowledge_base,
     search_rag_knowledge_base_cached,
@@ -23,7 +24,6 @@ from agent_tools import (
 # [MIGRATION] from google import genai / from google.genai import types を削除
 # [MIGRATION] AnthropicClient を helper_llm 経由で使用
 from helper.helper_llm import ToolUseResponse, create_llm_client
-from qdrant_client_wrapper import get_qdrant_client
 
 # 設定サービスからロガーと設定を取得
 from services.config_service import get_config, logger
@@ -163,15 +163,14 @@ class ReActAgent:
         use_hybrid_search: bool = True  # ★追加: ハイブリッド検索フラグ
     ):
         self.selected_collections = selected_collections
-        # [MIGRATION] モデルデフォルト: "claude-sonnet-4-6"
-        self.model_name = model_name or get_config("models.default", "claude-sonnet-4-6")
+        self.model_name = model_name or get_config("models.default", "gpt-5-mini")
         self.session_id = session_id or str(uuid.uuid4())
         self.use_hybrid_search = use_hybrid_search
 
         # [MIGRATION] AnthropicClient (via create_llm_client)
         # チャットセッション管理は messages リストで自前管理するため、
         # _setup_client() / _create_chat() は廃止。
-        self.llm = create_llm_client("anthropic", default_model=self.model_name)
+        self.llm = create_llm_client("openai", default_model=self.model_name)
 
         # [MIGRATION] Anthropic はステートレス設計のため、会話履歴を self._messages で管理する。
         # execute_turn() の先頭でリセットされる。
@@ -506,12 +505,9 @@ class ReActAgent:
 
 # Helper function
 def get_available_collections_from_qdrant_helper() -> List[str]:
-    """Qdrantから利用可能なコレクション名を取得"""
+    """Agent検索で利用可能な3072次元コレクション名を取得。"""
     try:
-        # シングルトン QdrantClient を使用（Phase 2 STEP 4 改善）
-        client = get_qdrant_client()
-        collections = client.get_collections()
-        return [c.name for c in collections.collections]
+        return get_searchable_collections_cached()
     except Exception as e:
         logger.error(f"Failed to fetch collections: {e}")
         return []

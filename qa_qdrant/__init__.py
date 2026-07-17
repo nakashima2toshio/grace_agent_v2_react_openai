@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import argparse
 import logging
 
-from config import DATASET_CONFIGS
+from config import DATASET_CONFIGS, ModelConfig
 from qa_generation.pipeline import QAPipeline
 
 # ログ設定
@@ -65,8 +65,8 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="claude-sonnet-4-6",
-        help="使用するLLMモデル（Anthropic Claude）"
+        default=ModelConfig.DEFAULT_MODEL,
+        help="使用するOpenAI LLMモデル"
     )
     parser.add_argument(
         "--output",
@@ -166,8 +166,8 @@ def main():
     args = parser.parse_args()
 
     # APIキー確認
-    if not os.getenv("GOOGLE_API_KEY"):
-        logger.error("GOOGLE_API_KEYが設定されていません")
+    if not os.getenv("OPENAI_API_KEY"):
+        logger.error("OPENAI_API_KEYが設定されていません")
         sys.exit(1)
 
     # ================================================================

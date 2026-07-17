@@ -6,8 +6,10 @@ Qdrant・API キー不要。
 - RAGSearchTool._apply_allowed_collections（許可リスト型の検索スコープ制限）
 - ReasoningTool._build_prompt（config.llm.prompt_addendum の注入）
 - 設定既定値（allowed_collections / prompt_addendum）
-- agent_support_example.PROFILES の実コレクション名（命名規約 `*_anthropic`）
+- agent_support_example.PROFILES の手動管理OpenAIコレクション名
 """
+from unittest.mock import MagicMock, patch
+
 from agent_support_example import PROFILES
 from grace.config import GraceConfig, LLMConfig, QdrantConfig
 from grace.tools import RAGSearchTool, ReasoningTool
@@ -48,14 +50,77 @@ class TestApplyAllowedCollections:
         scoped = RAGSearchTool._apply_allowed_collections(self.REAL_CANDIDATES, allowed)
         assert scoped == ["wikipedia_ja_5per"]
 
-    def test_no_match_falls_back_to_unrestricted(self):
-        # 専用コレクション未登録の段階ではデモが動くよう制限を適用しない（警告のみ）
+    def test_no_match_stops_without_fallback(self):
+        # 手動管理collectionが未登録でも、業界外collectionへフォールバックしない。
         allowed = ["saas_docs_anthropic", "saas_api_anthropic"]
-        assert RAGSearchTool._apply_allowed_collections(self.CANDIDATES, allowed) == self.CANDIDATES
-        assert RAGSearchTool._apply_allowed_collections(self.REAL_CANDIDATES, allowed) == self.REAL_CANDIDATES
+        assert RAGSearchTool._apply_allowed_collections(self.CANDIDATES, allowed) == []
+        assert RAGSearchTool._apply_allowed_collections(self.REAL_CANDIDATES, allowed) == []
 
     def test_empty_candidates_stay_empty(self):
         assert RAGSearchTool._apply_allowed_collections([], ["gov_faq_anthropic"]) == []
+
+
+class TestReadOnlyCollectionValidation:
+    def make_tool(self, *, points: int = 1, dimensions: int = 3072):
+        config = GraceConfig()
+        config.embedding.dimensions = 3072
+        tool = RAGSearchTool(config=config)
+        client = MagicMock()
+        info = MagicMock()
+        info.points_count = points
+        info.config.params.vectors.size = dimensions
+        client.get_collection.return_value = info
+        tool._client = client
+        return tool, client
+
+    def test_valid_collection_is_searchable_without_writes(self):
+        tool, client = self.make_tool()
+
+        assert tool._is_collection_searchable("gov_faq_ollama") is True
+        client.create_collection.assert_not_called()
+        client.recreate_collection.assert_not_called()
+        client.upsert.assert_not_called()
+        client.delete_collection.assert_not_called()
+
+    def test_empty_collection_stops_without_registration(self):
+        tool, client = self.make_tool(points=0)
+
+        assert tool._is_collection_searchable("gov_faq_ollama") is False
+        client.upsert.assert_not_called()
+        client.create_collection.assert_not_called()
+
+    def test_dimension_mismatch_stops_without_recreate(self):
+        tool, client = self.make_tool(dimensions=768)
+
+        assert tool._is_collection_searchable("gov_faq_ollama") is False
+        client.recreate_collection.assert_not_called()
+        client.delete_collection.assert_not_called()
+
+    def test_missing_collection_stops_without_create(self):
+        tool, client = self.make_tool()
+        client.get_collection.side_effect = RuntimeError("not found")
+
+        assert tool._is_collection_searchable("gov_faq_ollama") is False
+        client.create_collection.assert_not_called()
+
+    @patch("agent_tools.search_rag_knowledge_base_structured")
+    def test_broken_collection_is_skipped_and_next_collection_is_searched(self, mock_search):
+        config = GraceConfig()
+        config.qdrant.restrict_to_collection = False
+        config.qdrant.allowed_collections = []
+        tool = RAGSearchTool(config=config)
+        tool._get_all_collections_dynamic = MagicMock(
+            return_value=["broken_collection", "saas_docs_ollama"]
+        )
+        tool._is_collection_searchable = MagicMock(
+            side_effect=lambda name: name == "saas_docs_ollama"
+        )
+        mock_search.return_value = [{"score": 0.9, "payload": {"answer": "ok"}}]
+
+        result = tool.execute("APIの使い方")
+
+        assert result.success is True
+        mock_search.assert_called_once_with("APIの使い方", "saas_docs_ollama")
 
 
 class TestPromptAddendumInjection:
@@ -95,24 +160,16 @@ class TestConfigDefaults:
 
 
 class TestProfileCollections:
-    """PROFILES.collections が実コレクション名（命名規約準拠）であること。"""
-
-    KNOWN_DEFAULTS = {"wikipedia_ja", "livedoor", "cc_news", "japanese_text"}
+    """全プロファイルが手動管理OpenAIコレクションだけを参照すること。"""
 
     def test_collection_names_follow_convention(self):
-        for key, profile in PROFILES.items():
-            assert profile.collections, f"{key}: collections が空"
-            for name in profile.collections:
-                assert name.endswith("_anthropic") or name in self.KNOWN_DEFAULTS, (
-                    f"{key}: 実在し得ないコレクション名 {name!r}"
-                    "（命名規約 *_anthropic か既定コレクションを使う）"
-                )
+        assert PROFILES["gov"].collections == ["gov_faq_ollama"]
+        assert PROFILES["saas"].collections == ["saas_api_ollama", "saas_docs_ollama"]
+        assert PROFILES["ec"].collections == ["ec_faq_ollama"]
 
-    def test_vertical_prefix_matches_profile(self):
+    def test_profiles_use_only_manually_managed_collections(self):
+        expected = {
+            "gov_faq_ollama", "saas_api_ollama", "saas_docs_ollama", "ec_faq_ollama"
+        }
         for key, profile in PROFILES.items():
-            dedicated = [c for c in profile.collections if c.endswith("_anthropic")]
-            assert dedicated, f"{key}: 専用コレクションが 1 つもない"
-            for name in dedicated:
-                assert name.startswith(f"{key}_"), (
-                    f"{key}: 専用コレクション {name!r} は '{key}_' で始まる命名にする"
-                )
+            assert set(profile.collections) <= expected, key

@@ -178,4 +178,4 @@ requires = ["hatchling>=1.25.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["chunking", "grace", "helper", "qa_generation", "qa_qdrant", "services", "tools", "ui", "config"]
+packages = ["api", "chunking", "grace", "helper", "qa_generation", "qa_qdrant", "services", "tools", "ui", "config"]

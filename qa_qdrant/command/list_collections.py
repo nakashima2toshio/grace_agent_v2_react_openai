@@ -4,9 +4,9 @@
 list_collections.py - Qdrantコレクション一覧表示コマンド
 
 使用例:
-    python -m qa_qdrant.command.list_collections
-    python -m qa_qdrant.command.list_collections --url http://localhost:6333
-    python -m qa_qdrant.command.list_collections --detail   # ベクトル設定も表示
+    uv run python -m qa_qdrant.command.list_collections
+    uv run python -m qa_qdrant.command.list_collections --url http://localhost:6333
+    uv run python -m qa_qdrant.command.list_collections --detail   # ベクトル設定も表示
 """
 
 import argparse

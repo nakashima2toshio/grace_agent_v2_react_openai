@@ -25,10 +25,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
-# Gemini 3 Migration: Embedding抽象化レイヤー
+# Embedding抽象化レイヤー
 from helper.helper_embedding import (
-    DEFAULT_GEMINI_EMBEDDING_DIMS,
-    DEFAULT_OPENAI_EMBEDDING_DIMS,
     EmbeddingClient,
     create_embedding_client,
     get_embedding_dimensions,
@@ -48,7 +46,7 @@ except ImportError:
         HEALTH_CHECK_ENDPOINT = "/collections"
         DEFAULT_TIMEOUT = 30
         DEFAULT_VECTOR_SIZE = 3072
-        DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001"
+        DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
 
 # ログ設定
 logger = logging.getLogger(__name__)
@@ -73,19 +71,15 @@ DEFAULT_EMBEDDING_MODEL = QdrantConfig.DEFAULT_EMBEDDING_MODEL
 DEFAULT_VECTOR_SIZE = QdrantConfig.DEFAULT_VECTOR_SIZE
 
 # =====================================================
-# Gemini 3 Migration: プロバイダー設定
+# OpenAI Embeddingプロバイダー設定
 # =====================================================
-DEFAULT_EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "gemini")  # "gemini" or "openai"
+DEFAULT_EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "openai")
 
 # プロバイダー別のデフォルト設定
 PROVIDER_DEFAULTS = {
-    "gemini"   : {
-        "model": "gemini-embedding-001",
-        "dims" : DEFAULT_GEMINI_EMBEDDING_DIMS,  # 3072
-    },
     "openai"   : {
-        "model": "text-embedding-3-small",
-        "dims" : DEFAULT_OPENAI_EMBEDDING_DIMS,  # 1536
+        "model": "text-embedding-3-large",
+        "dims" : DEFAULT_VECTOR_SIZE,
     },
     "fastembed": {
         "model": "BAAI/bge-small-en-v1.5",
@@ -93,11 +87,7 @@ PROVIDER_DEFAULTS = {
     },
 }
 
-# コレクション固有の埋め込み設定（レガシー: OpenAI用）
-# [DEPRECATED] Phase 4 STEP 11: 現在の検索は DEFAULT_EMBEDDING_PROVIDER=gemini (3072次元) を使用。
-# これらの OpenAI 1536次元コレクションが Qdrant に残存している場合、次元数不整合で検索失敗する。
-# 旧コレクション (qa_corpus, qa_cc_news_*, qa_livedoor_*) は Qdrant から削除済みか確認すること。
-# 新規登録は COLLECTION_EMBEDDINGS_GEMINI または PROVIDER_DEFAULTS を使用すること。
+# コレクション固有の埋め込み設定（レガシー互換）。
 COLLECTION_EMBEDDINGS = {
     "qa_corpus"             : {"model": "text-embedding-3-small", "dims": 1536},
     "qa_cc_news_a02_llm"    : {"model": "text-embedding-3-small", "dims": 1536},
@@ -106,13 +96,6 @@ COLLECTION_EMBEDDINGS = {
     "qa_livedoor_a02_20_llm": {"model": "text-embedding-3-small", "dims": 1536},
     "qa_livedoor_a03_rule"  : {"model": "text-embedding-3-small", "dims": 1536},
     "qa_livedoor_a10_hybrid": {"model": "text-embedding-3-small", "dims": 1536},
-}
-
-# Gemini 3対応コレクション設定（3072次元）
-COLLECTION_EMBEDDINGS_GEMINI = {
-    "qa_corpus_gemini"  : {"provider": "gemini", "model": "gemini-embedding-001", "dims": 3072},
-    "qa_cc_news_gemini" : {"provider": "gemini", "model": "gemini-embedding-001", "dims": 3072},
-    "qa_livedoor_gemini": {"provider": "gemini", "model": "gemini-embedding-001", "dims": 3072},
 }
 
 # コレクション名とCSVファイルのマッピング
@@ -595,7 +578,7 @@ def embed_query(
         埋め込みベクトル
     """
     # Gemini統合関数に委譲
-    return embed_query_unified(text, provider="gemini")
+    return embed_query_unified(text, provider="openai")
 
 
 # =====================================================
@@ -1246,7 +1229,6 @@ __all__ = [
     # Gemini 3 Migration: プロバイダー設定
     "DEFAULT_EMBEDDING_PROVIDER",
     "PROVIDER_DEFAULTS",
-    "COLLECTION_EMBEDDINGS_GEMINI",
 
     # ユーティリティ
     "batched",

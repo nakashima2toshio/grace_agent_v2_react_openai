@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from helper.helper_llm import ToolUseResponse
-from services.agent_service import ReActAgent
+from services.agent_service import (
+    ReActAgent,
+    get_available_collections_from_qdrant_helper,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -52,10 +55,10 @@ class TestReActAgent:
 
     def test_init(self, mock_llm):
         """ReActAgent の初期化（Anthropic: create_llm_client）"""
-        agent = ReActAgent(selected_collections=["coll1"], model_name="claude-sonnet-4-6")
+        agent = ReActAgent(selected_collections=["coll1"], model_name="gpt-5-mini")
 
         assert agent.selected_collections == ["coll1"]
-        assert agent.model_name == "claude-sonnet-4-6"
+        assert agent.model_name == "gpt-5-mini"
         assert agent.thought_log == []
         # Anthropic クライアントが生成され、Tool Use 定義が input_schema 形式で構築される
         assert agent.llm is mock_llm
@@ -64,7 +67,7 @@ class TestReActAgent:
 
     def test_execute_turn_simple_answer(self, mock_llm):
         """モデルが直接回答を返すケース（ツール呼び出しなし）"""
-        agent = ReActAgent(selected_collections=[], model_name="claude-sonnet-4-6")
+        agent = ReActAgent(selected_collections=[], model_name="gpt-5-mini")
 
         # ReAct: テキストのみ（end_turn）→ Reflection: Final Answer
         mock_llm.generate_with_tools.side_effect = [
@@ -91,7 +94,7 @@ class TestReActAgent:
             'search_rag_knowledge_base': mock_search,
             'list_rag_collections': mock_list,
         }):
-            agent = ReActAgent(selected_collections=["coll1"], model_name="claude-sonnet-4-6")
+            agent = ReActAgent(selected_collections=["coll1"], model_name="gpt-5-mini")
 
             # 1. tool_use → 2. end_turn(回答) → 3. Reflection
             mock_llm.generate_with_tools.side_effect = [
@@ -122,10 +125,24 @@ class TestReActAgent:
             assert "Thought: I need to search." in agent.thought_log[0]
 
     def test_format_final_answer(self, mock_llm):
-        agent = ReActAgent(selected_collections=[], model_name="claude-sonnet-4-6")
+        agent = ReActAgent(selected_collections=[], model_name="gpt-5-mini")
 
         assert agent._format_final_answer("Answer: Yes") == "Yes"
         assert agent._format_final_answer("Thought: Hmmm\nAnswer: Yes") == "Yes"
         assert agent._format_final_answer("Thought: Just a thought") == "Just a thought"
         assert agent._format_final_answer("考え: 日本語で") == "日本語で"
         assert agent._format_final_answer("Raw text") == "Raw text"
+
+
+class TestCollectionSelector:
+    @patch("services.agent_service.get_searchable_collections_cached")
+    def test_returns_only_searchable_3072_collections(self, mock_get_collections):
+        mock_get_collections.return_value = ["current_3072"]
+
+        assert get_available_collections_from_qdrant_helper() == ["current_3072"]
+
+    @patch("services.agent_service.get_searchable_collections_cached")
+    def test_returns_empty_list_when_qdrant_lookup_fails(self, mock_get_collections):
+        mock_get_collections.side_effect = RuntimeError("Qdrant unavailable")
+
+        assert get_available_collections_from_qdrant_helper() == []

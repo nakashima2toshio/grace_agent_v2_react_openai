@@ -2,6 +2,7 @@
 {"vertical": "saas", "category": "in-scope", "query": "API のレート制限は？", "expected_decision": "answer", "expected_action": null}
 {"vertical": "saas", "category": "in-scope", "query": "Webhook の設定方法は？", "expected_decision": "answer", "expected_action": null}
 {"vertical": "saas", "category": "out-of-scope", "query": "御社の来期の売上見込みは？", "expected_decision": "escalate", "expected_action": "escalate_to_human"}
+{"vertical": "saas", "category": "no-info", "query": "未提供の架空機能 Quantum Sync Pro の設定手順は？", "expected_decision": "escalate", "expected_action": "escalate_to_human", "note": "製品ナレッジにない機能への情報なし回答を④'で検知する固定ケース"}
 {"vertical": "saas", "category": "action", "query": "500 エラーが出る不具合を報告したい", "expected_decision": "answer", "expected_action": "create_ticket", "note": "『エラー』『不具合』＋報告（request/incident）→ 起票"}
 {"vertical": "saas", "category": "escalate-keyword", "query": "サービスが落ちています", "expected_decision": "escalate", "expected_action": "escalate_to_human", "note": "『落ち』＋障害報告（incident）→ 強制エスカレ"}
 {"vertical": "saas", "category": "escalate-keyword", "query": "課金が二重になっています", "expected_decision": "escalate", "expected_action": "escalate_to_human", "note": "『課金』＋incident → 強制エスカレ"}

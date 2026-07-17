@@ -42,7 +42,7 @@ from celery_tasks import (
     collect_results,
     submit_unified_qa_generation,
 )
-from config import DATASET_CONFIGS
+from config import DATASET_CONFIGS, ModelConfig
 from helper.helper_llm import LLMClient
 from qa_generation.evaluation import analyze_coverage
 from qa_generation.smart_qa_generator import SmartQAGenerator
@@ -56,7 +56,7 @@ class QAPipeline:
     def __init__(self,
                  dataset_name: Optional[str] = None,
                  input_file: Optional[str] = None,
-                 model: str = "claude-sonnet-4-6",
+                 model: str = ModelConfig.DEFAULT_MODEL,
                  output_dir: str = "qa_output/pipeline",
                  max_docs: Optional[int] = None,
                  client: Optional[LLMClient] = None):
@@ -338,7 +338,7 @@ class QAPipeline:
             raise RuntimeError("Celery workers are not running")
 
         tasks = submit_unified_qa_generation(
-            chunks, self.config, self.model, provider="anthropic"
+            chunks, self.config, self.model, provider="openai"
         )
 
         # 逐次永続化: タスク完了ごとにチャンク結果を JSONL へ追記

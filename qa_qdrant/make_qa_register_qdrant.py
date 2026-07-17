@@ -18,7 +18,7 @@ python qa_qdrant/make_qa_register_qdrant.py \
 --input-file output_chunked/cc_news_1per_chunks.csv \
 --collection cc_news_1per \
 --use-celery \
---model claude-sonnet-4-6 \
+--model gpt-5-mini \
 --concurrency 8 \
 --recreate
 
@@ -27,7 +27,7 @@ python qa_qdrant/make_qa_register_qdrant.py \
 --input-file output_chunked/wikipedia_ja_1per_chunks.csv \
 --collection wikipedia_ja_1per \
 --use-celery \
---model claude-sonnet-4-6 \
+--model gpt-5-mini \
 --concurrency 8 \
 --recreate
 
@@ -70,7 +70,7 @@ Qdrant登録:
 --batch-size        Embeddingバッチサイズ（デフォルト: 100）
 
 Q/A生成:
---model             LLMモデル（Anthropic Claude / デフォルト: claude-sonnet-4-6）
+--model             OpenAI LLMモデル（デフォルト: ModelConfig.DEFAULT_MODEL）
 --use-celery        Celery並列処理を使用
 -c, --concurrency   並列タスク数（デフォルト: 8）
 --batch-chunks      1回のAPIで処理するチャンク数（デフォルト: 3）
@@ -102,7 +102,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from config import DATASET_CONFIGS
+from config import DATASET_CONFIGS, ModelConfig
 
 # QA生成関連
 from qa_generation.pipeline import QAPipeline
@@ -155,6 +155,10 @@ def run_registration(
     Returns:
         bool: 成功時True、失敗時False
     """
+    if provider != "openai":
+        logger.error("Qdrant登録のEmbeddingはOpenAIのみ対応します。")
+        return False
+
     logger.info("\n" + "=" * 60)
     logger.info("Phase 2: Qdrant Registration")
     logger.info("=" * 60)
@@ -207,7 +211,12 @@ def run_registration(
             batch_texts = texts[i: end_idx]
 
             # ベクトル化
-            vectors = embed_texts_for_qdrant(batch_texts)
+            vectors = embed_texts_for_qdrant(
+                batch_texts,
+                model="text-embedding-3-large",
+                batch_size=batch_size,
+                provider=provider,
+            )
             if not vectors:
                 logger.warning(f"   Batch {i}-{end_idx}: ベクトル生成失敗（スキップ）")
                 continue
@@ -224,6 +233,9 @@ def run_registration(
             # source情報を確実に正規化名で登録
             for point in points:
                 point.payload["source"] = normalized_filename
+                point.payload["embedding_provider"] = "openai"
+                point.payload["embedding_model"] = "text-embedding-3-large"
+                point.payload["embedding_dimensions"] = 3072
 
             # Qdrantへアップサート
             upsert_points_to_qdrant(client, collection_name, points)
@@ -320,8 +332,8 @@ def main():
     group_gen.add_argument(
         "--model",
         type=str,
-        default="claude-sonnet-4-6",
-        help="使用するLLMモデル（Anthropic Claude / デフォルト: claude-sonnet-4-6）"
+        default=ModelConfig.DEFAULT_MODEL,
+        help="使用するOpenAI LLMモデル"
     )
     group_gen.add_argument(
         "--max-docs",
@@ -378,8 +390,9 @@ def main():
     group_reg.add_argument(
         "--provider",
         type=str,
-        default="gemini",
-        help="Embeddingプロバイダー（デフォルト: gemini）"
+        default="openai",
+        choices=["openai"],
+        help="Embedding provider（OpenAI固定）"
     )
 
     # ================================================================
@@ -418,8 +431,8 @@ def main():
         sys.exit(1)
 
     # APIキー確認
-    if not os.getenv("GOOGLE_API_KEY"):
-        logger.error("GOOGLE_API_KEYが設定されていません")
+    if not os.getenv("OPENAI_API_KEY"):
+        logger.error("OPENAI_API_KEYが設定されていません")
         sys.exit(1)
 
     # Q/A生成モードのログ表示

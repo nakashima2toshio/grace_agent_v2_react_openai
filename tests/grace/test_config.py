@@ -24,9 +24,9 @@ class TestConfigModels:
         """LLMConfig のデフォルト値"""
         config = LLMConfig()
 
-        assert config.provider == "anthropic"
-        assert config.model == "claude-sonnet-4-6"
-        assert config.light_model == "claude-haiku-4-5-20251001"
+        assert config.provider == "openai"
+        assert config.model == "gpt-5-mini"
+        assert config.light_model == "gpt-5-nano"
         assert config.temperature == 0.7
         assert config.max_tokens == 4096
         assert config.timeout == 30
@@ -35,8 +35,8 @@ class TestConfigModels:
         """EmbeddingConfig のデフォルト値"""
         config = EmbeddingConfig()
 
-        assert config.provider == "gemini"
-        assert config.model == "gemini-embedding-001"
+        assert config.provider == "openai"
+        assert config.model == "text-embedding-3-large"
         assert config.dimensions == 3072
 
     def test_confidence_config_defaults(self):
@@ -53,7 +53,7 @@ class TestConfigModels:
         config = GraceConfig()
 
         assert config.version == "1.0"
-        assert config.llm.provider == "anthropic"
+        assert config.llm.provider == "openai"
         assert config.embedding.dimensions == 3072
         assert config.replan.max_replans == 3
         assert config.cost.daily_limit_usd == 10.0
@@ -82,7 +82,7 @@ class TestConfigLoader:
         config = loader.load()
 
         assert isinstance(config, GraceConfig)
-        assert config.llm.model == "claude-sonnet-4-6"
+        assert config.llm.model == "gpt-5-mini"
 
     def test_load_from_yaml(self):
         """YAMLファイルから読み込み"""

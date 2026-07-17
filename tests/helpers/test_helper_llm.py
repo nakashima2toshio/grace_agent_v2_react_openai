@@ -7,6 +7,7 @@ helper_llm.py 単体テスト
 
 import os
 import sys
+from types import SimpleNamespace
 from typing import List
 from unittest.mock import Mock, patch
 
@@ -76,38 +77,37 @@ class TestOpenAIClient:
 
     def test_generate_content(self, mock_openai_client):
         client, mock_instance = mock_openai_client
-        mock_choice = Mock()
-        mock_choice.message.content = "Hello, world!"
         mock_response = Mock()
-        mock_response.choices = [mock_choice]
-        mock_instance.chat.completions.create.return_value = mock_response
+        mock_response.output_text = "Hello, world!"
+        mock_response.usage = None
+        mock_instance.responses.create.return_value = mock_response
 
         result = client.generate_content("Say hello")
         assert result == "Hello, world!"
 
     def test_generate_content_with_system_instruction(self, mock_openai_client):
         client, mock_instance = mock_openai_client
-        mock_choice = Mock()
-        mock_choice.message.content = "Response"
         mock_response = Mock()
-        mock_response.choices = [mock_choice]
-        mock_instance.chat.completions.create.return_value = mock_response
+        mock_response.output_text = "Response"
+        mock_response.usage = None
+        mock_instance.responses.create.return_value = mock_response
         
-        client.generate_content("Question", extra_param="test")
-        call_args = mock_instance.chat.completions.create.call_args
-        assert call_args.kwargs["extra_param"] == "test"
+        client.generate_content("Question", max_tokens=123, temperature=0.7)
+        call_args = mock_instance.responses.create.call_args
+        assert call_args.kwargs["max_output_tokens"] == 123
+        assert "temperature" not in call_args.kwargs
 
     def test_generate_structured(self, mock_openai_client):
         client, mock_instance = mock_openai_client
-        mock_choice = Mock()
-        mock_choice.message.parsed = MockResponseSchema(message="test", score=100)
         mock_response = Mock()
-        mock_response.choices = [mock_choice]
-        mock_instance.beta.chat.completions.parse.return_value = mock_response
+        mock_response.output_parsed = MockResponseSchema(message="test", score=100)
+        mock_response.usage = None
+        mock_instance.responses.parse.return_value = mock_response
 
         result = client.generate_structured("Generate test", MockResponseSchema)
         assert result.message == "test"
         assert result.score == 100
+        assert mock_instance.responses.parse.call_args.kwargs["text_format"] is MockResponseSchema
 
     def test_count_tokens(self, mock_openai_client):
         client, _ = mock_openai_client
@@ -119,6 +119,63 @@ class TestOpenAIClient:
 
             count = client.count_tokens("Hello world")
             assert count == 5
+
+    def test_generate_with_tools_uses_responses_function_calling(self, mock_openai_client):
+        client, mock_instance = mock_openai_client
+        mock_instance.responses.create.return_value = SimpleNamespace(
+            output=[SimpleNamespace(
+                type="function_call",
+                name="search",
+                arguments='{"query":"news"}',
+                call_id="call_1",
+            )],
+            output_text="",
+            usage=SimpleNamespace(input_tokens=4, output_tokens=2),
+        )
+
+        result = client.generate_with_tools(
+            messages=[{"role": "user", "content": "search news"}],
+            tools=[{
+                "name": "search",
+                "description": "search",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            }],
+            system="system",
+        )
+
+        assert result.stop_reason == "tool_use"
+        assert result.tool_calls == [
+            {"name": "search", "input": {"query": "news"}, "id": "call_1"}
+        ]
+        call = mock_instance.responses.create.call_args.kwargs
+        assert call["tools"][0]["type"] == "function"
+        assert call["tools"][0]["parameters"]["required"] == ["query"]
+
+    def test_tool_result_is_converted_to_function_call_output(self, mock_openai_client):
+        client, mock_instance = mock_openai_client
+        mock_instance.responses.create.return_value = SimpleNamespace(
+            output=[], output_text="done", usage=None,
+        )
+        client.generate_with_tools(
+            messages=[{
+                "role": "user",
+                "content": [{
+                    "type": "tool_result",
+                    "tool_use_id": "call_1",
+                    "content": "result",
+                }],
+            }],
+            tools=[],
+        )
+        assert mock_instance.responses.create.call_args.kwargs["input"] == [{
+            "type": "function_call_output",
+            "call_id": "call_1",
+            "output": "result",
+        }]
 
 # ====================================
 # GeminiClient テスト

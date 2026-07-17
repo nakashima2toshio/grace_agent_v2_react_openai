@@ -2,13 +2,12 @@
 """
 非同期APIクライアント（チャンク化用・構造化出力）
 
-[MIGRATION gemini→anthropic]
-  google.genai の models.generate_content(response_schema=...) ベースから、
-  Anthropic（create_llm_client("anthropic").generate_structured）ベースへ移行。
+[MIGRATION OpenAI]
+  OpenAI Responses API（generate_structured → responses.parse）を使用する。
   同期 API を asyncio.to_thread() でラップし、Semaphore で並列数を制御する。
   - 戻り値契約は従来どおり「検証済み JSON 文字列」（呼び出し側が
     model_validate_json() でパースする）を維持。
-  - LLM は Anthropic Claude（既定 claude-sonnet-4-6）。
+  - LLM はOpenAI（既定 ModelConfig.DEFAULT_MODEL）。
 """
 
 import asyncio
@@ -17,6 +16,7 @@ from typing import Optional, Type
 
 from pydantic import BaseModel
 
+from config import ModelConfig
 from helper.helper_llm import create_llm_client
 
 logger = logging.getLogger(__name__)
@@ -36,18 +36,17 @@ class AsyncAPIClient:
         max_workers: int = 8,
         max_retries: int = 3,
         max_output_tokens: int = 8192,
-        default_model: str = "claude-sonnet-4-6",
+        default_model: str = ModelConfig.DEFAULT_MODEL,
     ):
         """
         Args:
-            api_key: 後方互換のため残置（未使用。Anthropic は ANTHROPIC_API_KEY を参照）
+            api_key: 未指定時はOPENAI_API_KEYから解決
             max_workers: 並列数（デフォルト: 8、固定）
             max_retries: リトライ回数（デフォルト: 3）
             max_output_tokens: 出力トークン制限
-            default_model: 既定 Claude モデル
+            default_model: 既定OpenAIモデル
         """
-        # [MIGRATION] genai.Client → 統一 Anthropic クライアント
-        self.llm = create_llm_client("anthropic", default_model=default_model)
+        self.llm = create_llm_client("openai", api_key=api_key, default_model=default_model)
         self.default_model = default_model
         self.max_workers = max_workers
         self.semaphore = asyncio.Semaphore(max_workers)
@@ -59,14 +58,8 @@ class AsyncAPIClient:
 
     @staticmethod
     def _resolve_model(model: Optional[str], default_model: str) -> str:
-        """渡されたモデル名が Claude 系でなければ既定 Claude モデルへ回避する。
-
-        チャンク化呼び出し側はレガシーで Gemini モデル名を渡す場合があるため、
-        Anthropic エンドポイントに非 Claude 名を投げて失敗しないよう保護する。
-        """
-        if model and str(model).lower().startswith("claude"):
-            return model
-        return default_model
+        """明示されたOpenAIモデル名を変換せず、そのまま使用する。"""
+        return model or default_model
 
     async def generate_content(
         self,

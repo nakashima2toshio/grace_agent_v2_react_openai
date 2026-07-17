@@ -61,7 +61,7 @@ class TestQdrantService:
         
         params = get_collection_embedding_params(mock_qdrant_client, "c")
         assert params["dims"] == 3072
-        assert params["model"] == "gemini-embedding-001"
+        assert params["model"] == "text-embedding-3-large"
 
     def test_health_checker(self):
         checker = QdrantHealthChecker()
@@ -119,9 +119,12 @@ class TestQdrantService:
         mock_client.embed_texts.return_value = [[0.1]*3072]
         mock_create.return_value = mock_client
         
-        vecs = embed_texts_for_qdrant(["text"], model="gemini")
+        vecs = embed_texts_for_qdrant(["text"])
         assert len(vecs) == 1
         assert len(vecs[0]) == 3072
+        mock_create.assert_called_once_with(
+            provider="openai", model="text-embedding-3-large", dims=3072
+        )
 
     def test_build_points_for_qdrant(self):
         df = pd.DataFrame({"question": ["q"], "answer": ["a"]})
@@ -140,6 +143,7 @@ class TestQdrantService:
         
         vec = embed_query_for_search("q", dims=3072)
         assert len(vec) == 3072
+        mock_create.assert_called_once_with(provider="openai", dims=3072)
 
     def test_merge_collections(self, mock_qdrant_client):
         # Mock scroll

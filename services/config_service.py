@@ -48,7 +48,7 @@ class ConfigManager:
 
     def _setup_logger(self) -> logging.Logger:
         """ロガーの設定"""
-        logger = logging.getLogger('Gemini_helper')
+        logger = logging.getLogger('OpenAI_helper')
 
         # 既に設定済みの場合はスキップ
         if logger.handlers:
@@ -101,13 +101,8 @@ class ConfigManager:
 
     def _apply_env_overrides(self, config: Dict[str, Any]) -> None:
         """環境変数による設定オーバーライド"""
-        # GOOGLE Gemini API Key
-        if os.getenv("GOOGLE_API_KEY"):
-            config.setdefault("api", {})["google_api_key"] = os.getenv("GOOGLE_API_KEY")
-
-        # Google API Key
-        if os.getenv("GOOGLE_API_KEY"):
-            config.setdefault("api", {})["google_api_key"] = os.getenv("GOOGLE_API_KEY")
+        if os.getenv("OPENAI_API_KEY"):
+            config.setdefault("api", {})["openai_api_key"] = os.getenv("OPENAI_API_KEY")
 
         # ログレベル
         if os.getenv("LOG_LEVEL"):
@@ -125,14 +120,13 @@ class ConfigManager:
         """デフォルト設定"""
         return {
             "models": {
-                "default": "claude-sonnet-4-6",
-                "available": ["claude-sonnet-4-6", "claude-haiku-4-5-20251001"]
+                "default": "gpt-5-mini",
+                "available": ["gpt-5-mini", "gpt-5-nano"]
             },
             "api": {
                 "timeout": 30,
                 "max_retries": 3,
                 "openai_api_key": None,
-                "google_api_key": None
             },
             "ui": {
                 "page_title": "RAG Q/A Generator",
@@ -161,7 +155,7 @@ class ConfigManager:
                 "performance_monitoring": True
             },
             "llm": {
-                "provider": "anthropic"
+                "provider": "openai"
             }
         }
 

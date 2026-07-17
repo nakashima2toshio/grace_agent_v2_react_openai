@@ -107,6 +107,41 @@ jobs:
           PYTHONPATH: .
         run: pytest tests/ -q -rs
 
+  frontend:
+    name: React lint, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Verify generated API types
+        run: npm run types:check
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
   # --------------------------------------------------------------------------
   # 自動マージ: claude/* ブランチの PR を CI（build）成功後に master へマージ
   # --------------------------------------------------------------------------

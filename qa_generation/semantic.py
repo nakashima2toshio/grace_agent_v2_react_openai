@@ -19,17 +19,16 @@ logger = logging.getLogger(__name__)
 class SemanticCoverage:
     """意味的な網羅性を測定するクラス
 
-    Embedding は Gemini（gemini-embedding-001 / 3072次元）を使用し、
-    トークンカウント等の LLM 文脈は Anthropic Claude（統一クライアント）を使用する。
+    Embedding はOpenAI（text-embedding-3-large / 3072次元）を使用し、
+    LLM処理もOpenAI統一クライアントを使用する。
     """
 
-    def __init__(self, embedding_model="gemini-embedding-001"):
+    def __init__(self, embedding_model="text-embedding-3-large"):
         self.embedding_model = embedding_model
-        # Gemini埋め込みクライアントを使用
-        self.embedding_client = create_embedding_client(provider="gemini")
-        self.embedding_dims = get_embedding_dimensions("gemini")  # 3072
+        self.embedding_client = create_embedding_client(provider="openai")
+        self.embedding_dims = get_embedding_dimensions("openai")
         # トークンカウント用のLLMクライアント (decode機能がないためtiktokenを併用)
-        self.unified_client = create_llm_client(provider="anthropic")
+        self.unified_client = create_llm_client(provider="openai")
         self.tokenizer = tiktoken.get_encoding("cl100k_base") # 強制分割・デコード用にtiktokenを使用
         
         # APIキーの有無フラグ（クライアント作成成功ならTrue）

@@ -25,7 +25,7 @@ class TestConfigManager:
             cm = ConfigManager()
             # Should have defaults
             assert cm.get("api.timeout") == 30
-            assert cm.get("models.default") == "claude-sonnet-4-6"
+            assert cm.get("models.default") == "gpt-5-mini"
 
     def test_load_yaml(self):
         yaml_content = """
@@ -43,10 +43,10 @@ models:
 
     def test_env_override(self):
         with patch("services.config_service.Path.exists", return_value=False), \
-             patch.dict(os.environ, {"GOOGLE_API_KEY": "env_key"}):
+             patch.dict(os.environ, {"OPENAI_API_KEY": "env_key"}):
 
             cm = ConfigManager()
-            assert cm.get("api.google_api_key") == "env_key"
+            assert cm.get("api.openai_api_key") == "env_key"
 
     def test_get_set(self):
         with patch("services.config_service.Path.exists", return_value=False):
@@ -63,4 +63,3 @@ models:
          with patch("services.config_service.Path.exists", return_value=False):
             cm = ConfigManager()
             assert cm.get("non.existent.key", "default_val") == "default_val"
-

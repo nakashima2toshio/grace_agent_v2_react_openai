@@ -64,9 +64,15 @@ class TestMakeQaRegisterQdrantCSVFixed(unittest.TestCase):
         df_ok = pd.DataFrame({'question': ['q'], 'answer': ['a']})
         df_ok.to_csv(self.csv_path, index=False)
         
-        result = run_registration(self.csv_path, "test_coll", False, 1, "gemini")
+        result = run_registration(self.csv_path, "test_coll", False, 1, "openai")
         
         self.assertTrue(result)
+        mock_embed.assert_called_once_with(
+            ["q"],
+            model="text-embedding-3-large",
+            batch_size=1,
+            provider="openai",
+        )
         self.assertTrue(os.path.exists(os.path.join(self.output_dir, "test.csv")))
 
 if __name__ == '__main__':

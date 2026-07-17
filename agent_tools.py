@@ -47,6 +47,54 @@ _collections_cache: Optional[List[str]] = None
 _collections_cache_time: float = 0.0
 _COLLECTIONS_CACHE_TTL: float = 60.0  # 60秒
 
+# 検索クエリは現行の既定 Embedding と同じ 3072 次元に限定する。
+# 768 次元を含む異なる次元のコレクションは、Qdrant へ送信する前に除外する。
+SEARCH_VECTOR_DIMENSION: int = 3072
+
+
+def get_collection_dense_dimension(collection_name: str) -> Optional[int]:
+    """Qdrant コレクションの dense vector 次元を読み取り専用で取得する。
+
+    単一ベクトルと Named Vector の双方を扱う。Named Vector に複数の異なる
+    次元がある場合は検索対象を一意に決められないため None を返す。
+    """
+    try:
+        info = client.get_collection(collection_name)
+        vectors = info.config.params.vectors
+        size = getattr(vectors, "size", None)
+        if size is not None:
+            return int(size)
+        if isinstance(vectors, dict):
+            dimensions = {
+                int(vector.size)
+                for vector in vectors.values()
+                if getattr(vector, "size", None) is not None
+            }
+            if len(dimensions) == 1:
+                return dimensions.pop()
+        return None
+    except Exception as e:
+        logger.warning(
+            "コレクション '%s' のベクトル次元を取得できません: %s",
+            collection_name,
+            e,
+        )
+        return None
+
+
+def is_searchable_collection(collection_name: str) -> bool:
+    """現行の 3072 次元検索で安全に検索できるコレクションか判定する。"""
+    dimension = get_collection_dense_dimension(collection_name)
+    if dimension != SEARCH_VECTOR_DIMENSION:
+        logger.warning(
+            "検索対象外コレクション: collection=%s, dim=%s, required_dim=%s",
+            collection_name,
+            dimension if dimension is not None else "unknown",
+            SEARCH_VECTOR_DIMENSION,
+        )
+        return False
+    return True
+
 
 def get_existing_collections_cached() -> List[str]:
     """
@@ -62,6 +110,20 @@ def get_existing_collections_cached() -> List[str]:
         _collections_cache_time = now
         logger.debug(f"コレクション一覧キャッシュ更新: {len(_collections_cache)}件")
     return _collections_cache
+
+
+def get_searchable_collections_cached() -> List[str]:
+    """既存コレクションから 3072 次元の検索対象だけを返す。
+
+    生の一覧は従来どおり TTL キャッシュし、次元は呼び出し時に再確認する。
+    コレクションを再作成して次元が変わった場合も、一覧 TTL の満了を待たずに
+    検索対象へ反映される。
+    """
+    return [
+        collection
+        for collection in get_existing_collections_cached()
+        if is_searchable_collection(collection)
+    ]
 
 
 # ============ カスタム例外 ============
@@ -346,7 +408,7 @@ def search_rag_knowledge_base(
 
     # Step 2: 全コレクション一覧取得
     try:
-        all_collections = get_existing_collections_cached()
+        all_collections = get_searchable_collections_cached()
         logger.info(f"🔍 全コレクション並列検索: {len(all_collections)}コレクション")
     except Exception as e:
         logger.error(f"コレクション一覧取得エラー: {e}")
@@ -432,6 +494,15 @@ def search_rag_knowledge_base_structured(
             logger.warning(error_msg)
             raise CollectionNotFoundError(error_msg)
 
+        if not is_searchable_collection(collection_name):
+            dimension = get_collection_dense_dimension(collection_name)
+            return (
+                "[[RAG_TOOL_UNSUPPORTED_DIMENSION]] "
+                f"コレクション '{collection_name}' は "
+                f"{dimension if dimension is not None else '不明'} 次元のため、"
+                f"{SEARCH_VECTOR_DIMENSION} 次元の検索対象外です。"
+            )
+
         # Phase 3 STEP 7 改善: 事前計算ベクトルがあればそれを使用
         if precomputed_query_vector is not None:
             query_vector = precomputed_query_vector
@@ -440,6 +511,14 @@ def search_rag_knowledge_base_structured(
             query_vector: List[float] = embed_query(query)
         if query_vector is None:
             raise EmbeddingError("クエリの埋め込み生成に失敗しました。")
+        if len(query_vector) != SEARCH_VECTOR_DIMENSION:
+            error_msg = (
+                "[[RAG_TOOL_UNSUPPORTED_DIMENSION]] "
+                f"検索ベクトルは {len(query_vector)} 次元のため、"
+                f"{SEARCH_VECTOR_DIMENSION} 次元コレクションへ送信できません。"
+            )
+            logger.error(error_msg)
+            return error_msg
 
         # ★変更: use_hybrid_search フラグに基づいてスパースベクトルを生成
         sparse_vector = None
@@ -574,6 +653,14 @@ def search_rag_knowledge_base_cached(
     # ステップ1: ユーザーが明示的にコレクション指定した場合
     if collection_name:
         logger.info(f"🎯 ユーザー指定コレクション: {collection_name}")
+        if not is_searchable_collection(collection_name):
+            dimension = get_collection_dense_dimension(collection_name)
+            return (
+                "[[RAG_TOOL_UNSUPPORTED_DIMENSION]] "
+                f"コレクション '{collection_name}' は "
+                f"{dimension if dimension is not None else '不明'} 次元のため、"
+                f"{SEARCH_VECTOR_DIMENSION} 次元の検索対象外です。"
+            )
         # Phase 3 STEP 7 改善: 事前計算ベクトルを渡す
         result = search_rag_knowledge_base_structured(
             query, collection_name,
@@ -591,6 +678,13 @@ def search_rag_knowledge_base_cached(
 
     # ステップ2: キャッシュチェック
     cached_entry = collection_cache.get(session_id)
+
+    if cached_entry and not is_searchable_collection(cached_entry.collection_name):
+        logger.warning(
+            "キャッシュされたコレクションは検索対象外のため全検索へ移行: %s",
+            cached_entry.collection_name,
+        )
+        cached_entry = None
 
     if cached_entry:
         logger.info(
@@ -632,7 +726,7 @@ def search_rag_knowledge_base_cached(
     # ステップ3: 全コレクション並列検索
     try:
         # Phase 3 STEP 6 改善: コレクション一覧キャッシュ化
-        all_collections = get_existing_collections_cached()
+        all_collections = get_searchable_collections_cached()
         logger.info(f"🔍 全コレクション並列検索: {len(all_collections)}コレクション × 4並列")
     except Exception as e:
         logger.error(f"コレクション一覧取得エラー: {e}")

@@ -1,16 +1,16 @@
-# config.yml（LLM=Anthropic Claude / Embedding=Gemini）
+# config.yml（LLM／EmbeddingともにOpenAI）
 
 models:
-  default: "claude-sonnet-4-6"  # Anthropic デフォルトモデル（推論・生成）
+  default: "gpt-5-mini"
   available:
-    - "claude-sonnet-4-6"             # 推論・生成（既定）
-    - "claude-haiku-4-5-20251001"     # 高速・文字列処理向け
+    - "gpt-5-mini"
+    - "gpt-5-nano"
 
   categories:
-    thinking: ["claude-sonnet-4-6"]              # 高度推論
-    fast: ["claude-haiku-4-5-20251001"]          # 高速処理
-    standard: ["claude-sonnet-4-6"]              # 標準処理
-    embeddings: ["gemini-embedding-001"]         # Embedding（Gemini 継続）
+    thinking: ["gpt-5-mini"]
+    fast: ["gpt-5-nano"]
+    standard: ["gpt-5-mini"]
+    embeddings: ["text-embedding-3-large"]
 
 samples:
   images:
@@ -60,84 +60,18 @@ model_pricing:
     output: 0.0
 
 # =====================================================
-# Gemini API Configuration (Gemini 3 Migration)
-# =====================================================
-gemini:
-  # LLM設定
-  default_model: "gemini-2.5-flash"
-  available_models:
-    - "gemini-3-pro"              # 最新Pro（思考モード対応）
-    - "gemini-3.0-flash"          # 高速・思考対応
-    - "gemini-2.5-flash"          # 高速・思考対応
-    - "gemini-2.0-flash"           # 安定版（推奨デフォルト）
-    - "gemini-1.5-pro"             # レガシー
-    - "gemini-1.5-flash"           # レガシー高速
-
-  # Embedding設定（Gemini 3アドバンテージ: 3072次元）
-  embedding:
-    model: "gemini-embedding-001"
-    dimensions: 3072               # Gemini 3最大精度（OpenAI: 1536）
-    task_types:
-      - "RETRIEVAL_DOCUMENT"       # ドキュメントインデックス用
-      - "RETRIEVAL_QUERY"          # クエリ用
-      - "SEMANTIC_SIMILARITY"      # 類似度計算用
-      - "CLASSIFICATION"           # 分類用
-
-  # 思考レベル設定（Gemini 3 / 2.5対応モデル用）
-  thinking:
-    default_level: "low"           # "low" または "high"
-    supported_models:
-      - "gemini-3-pro-preview"
-      - "gemini-2.5-flash-preview"
-
-  # 生成パラメータ
-  generation:
-    default_temperature: 1.0
-    default_max_tokens: 8192
-    top_p: 0.95
-    top_k: 40
-
-  # 料金（$/1M tokens）
-  pricing:
-    gemini-3-pro-preview:
-      input: 1.25
-      output: 10.0
-    gemini-2.5-flash-preview:
-      input: 0.15
-      output: 3.50
-    gemini-2.0-flash:
-      input: 0.10
-      output: 0.40
-    gemini-1.5-pro:
-      input: 1.25
-      output: 5.00
-    gemini-1.5-flash:
-      input: 0.075
-      output: 0.30
-    gemini-embedding-001:
-      input: 0.00         # 無料
-      output: 0.00
-
-  # レート制限
-  rate_limits:
-    requests_per_minute: 60
-    tokens_per_minute: 1000000
-
-# =====================================================
 # Provider Configuration
 # =====================================================
 provider:
-  # デフォルトプロバイダー設定
-  default_llm: "gemini"            # "openai" or "gemini"
-  default_embedding: "gemini"      # "openai" or "gemini"
+  default_llm: "openai"
+  default_embedding: "openai"
 
   # OpenAI設定
   openai:
-    embedding_model: "text-embedding-3-small"
-    embedding_dims: 1536
-
-  # Gemini設定（上記geminiセクション参照）
-  # embedding_dims: 3072
+    llm_model: "gpt-5-mini"
+    light_model: "gpt-5-nano"
+    embedding_model: "text-embedding-3-large"
+    embedding_dims: 3072
 
 # =====================================================
 # Qdrant Configuration
@@ -150,8 +84,7 @@ qdrant:
 
   # ベクトル次元数（プロバイダーに応じて設定）
   vector_dims:
-    gemini: 3072                   # Gemini Embedding次元
-    openai: 1536                   # OpenAI Embedding次元
+    openai: 3072
 
   # インデックス設定
   index:

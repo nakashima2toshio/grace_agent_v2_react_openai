@@ -150,7 +150,7 @@ def register_to_qdrant(
         text_col: Optional[str] = None,
         domain: Optional[str] = None,
         max_docs: Optional[int] = None,
-        provider: str = "gemini",
+        provider: str = "openai",
         normalize_filename: bool = True,
         create_ui_csv: bool = True,
         ui_output_dir: str = "qa_output",
@@ -177,6 +177,10 @@ def register_to_qdrant(
     Returns:
         bool: 成功時True、失敗時False
     """
+    if provider != "openai":
+        logger.error("❌ Qdrant登録のEmbeddingはOpenAIのみ対応します。")
+        return False
+
     # ================================================================
     # 1. 入力検証
     # ================================================================
@@ -301,7 +305,13 @@ def register_to_qdrant(
             # スライディングウィンドウで先のバッチの Embedding を投入
             while next_submit < len(batch_ranges) and next_submit <= k + lookahead - 1:
                 s, e = batch_ranges[next_submit]
-                futures[next_submit] = executor.submit(embed_texts_for_qdrant, texts[s:e])
+                futures[next_submit] = executor.submit(
+                    embed_texts_for_qdrant,
+                    texts[s:e],
+                    model="text-embedding-3-large",
+                    batch_size=batch_size,
+                    provider=provider,
+                )
                 next_submit += 1
 
             batch_df = df.iloc[start_idx:end_idx]
@@ -330,10 +340,8 @@ def register_to_qdrant(
 
                 # Embeddingメタデータ
                 point.payload["embedding_provider"] = provider
-                if provider == "gemini":
-                    point.payload["embedding_model"] = "gemini-embedding-001"
-                elif provider == "openai":
-                    point.payload["embedding_model"] = "text-embedding-3-small"
+                point.payload["embedding_model"] = "text-embedding-3-large"
+                point.payload["embedding_dimensions"] = 3072
 
             # D. Qdrantへアップサート
             upsert_points_to_qdrant(client, collection_name, points)
@@ -491,9 +499,9 @@ def main():
     vector_group.add_argument(
         "--provider",
         type=str,
-        default="gemini",
-        choices=["gemini", "openai"],
-        help="Embeddingに使用するプロバイダー（デフォルト: gemini）"
+        default="openai",
+        choices=["openai"],
+        help="Embedding provider（OpenAI固定）"
     )
 
     # ================================================================
@@ -553,11 +561,7 @@ def main():
     # ================================================================
     # APIキー確認
     # ================================================================
-    if args.provider == "gemini" and not os.getenv("GOOGLE_API_KEY"):
-        logger.error("❌ GOOGLE_API_KEY環境変数が設定されていません。")
-        sys.exit(1)
-
-    if args.provider == "openai" and not os.getenv("OPENAI_API_KEY"):
+    if not os.getenv("OPENAI_API_KEY"):
         logger.error("❌ OPENAI_API_KEY環境変数が設定されていません。")
         sys.exit(1)
 
@@ -584,4 +588,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

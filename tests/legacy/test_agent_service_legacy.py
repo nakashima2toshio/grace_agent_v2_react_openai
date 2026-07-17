@@ -366,28 +366,19 @@ class TestWikipediaSearchScenario:
 class TestHelperFunctions:
     """ヘルパー関数のテスト"""
 
-    @patch('services.agent_service.get_qdrant_client')
-    def test_get_available_collections_success(self, mock_get_client):
-        """コレクション取得成功のテスト（新実装: get_qdrant_client シングルトン）"""
-        mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
-
-        Collection = namedtuple('Collection', ['name'])
-        mock_client.get_collections.return_value.collections = [
-            Collection(name='wikipedia_ja'),
-            Collection(name='livedoor'),
-        ]
+    @patch('services.agent_service.get_searchable_collections_cached')
+    def test_get_available_collections_success(self, mock_get_collections):
+        """3072次元の検索可能コレクション取得成功のテスト。"""
+        mock_get_collections.return_value = ['wikipedia_ja', 'livedoor']
 
         result = get_available_collections_from_qdrant_helper()
 
         assert result == ['wikipedia_ja', 'livedoor']
 
-    @patch('services.agent_service.get_qdrant_client')
-    def test_get_available_collections_error(self, mock_get_client):
+    @patch('services.agent_service.get_searchable_collections_cached')
+    def test_get_available_collections_error(self, mock_get_collections):
         """コレクション取得エラーのテスト"""
-        mock_client = MagicMock()
-        mock_get_client.return_value = mock_client
-        mock_client.get_collections.side_effect = Exception("Connection failed")
+        mock_get_collections.side_effect = Exception("Connection failed")
 
         result = get_available_collections_from_qdrant_helper()
 
